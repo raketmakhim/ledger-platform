@@ -1,3 +1,11 @@
 spring:
   application:
     name: ledger-platform
+  datasource:
+    url: jdbc:postgresql://localhost:5432/ledger
+    username: ledger
+    password: ledger
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
