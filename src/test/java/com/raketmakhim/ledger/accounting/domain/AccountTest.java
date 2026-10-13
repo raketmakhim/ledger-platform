@@ -7,8 +7,13 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Currency;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 class AccountTest {
 
@@ -95,6 +100,25 @@ class AccountTest {
         Posting other = new Posting(UUID.randomUUID(), UUID.randomUUID(), gbp("1"));
 
         assertThatThrownBy(() -> account.applyPosting(other)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    static Stream<Arguments> accountsWithOneNullField() {
+        UUID id = UUID.randomUUID();
+        Instant now = Instant.now();
+        Money zero = gbp("0");
+        return Stream.of(
+                Arguments.of("id", (Executable) () -> new Account(null, GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE, zero, 0, now)),
+                Arguments.of("currency", (Executable) () -> new Account(id, null, AccountType.CUSTOMER, AccountStatus.ACTIVE, zero, 0, now)),
+                Arguments.of("type", (Executable) () -> new Account(id, GBP, null, AccountStatus.ACTIVE, zero, 0, now)),
+                Arguments.of("status", (Executable) () -> new Account(id, GBP, AccountType.CUSTOMER, null, zero, 0, now)),
+                Arguments.of("balance", (Executable) () -> new Account(id, GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE, null, 0, now)),
+                Arguments.of("createdAt", (Executable) () -> new Account(id, GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE, zero, 0, null)));
+    }
+
+    @ParameterizedTest(name = "{0} null is rejected")
+    @MethodSource("accountsWithOneNullField")
+    void rejectsNullFields(String field, Executable construct) {
+        assertThatThrownBy(construct::execute).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
