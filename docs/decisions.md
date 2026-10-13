@@ -53,3 +53,27 @@ Gave up: newest features. The Boot 4 migration is planned last (roadmap item 10)
 Chose hexagonal (ports and adapters), with packages grouped by feature (`ledger`, `transfer`), each split into `domain`, `application` and `adapter`. The `domain` package is plain Java with no Spring or JPA imports, so rules like "a journal entry must balance" are unit-testable without a database. REST, JPA and the Kafka outbox are adapters behind interfaces.
 
 Gave up: simplicity. More files and interfaces than the default layered Spring layout (`controller`, `service`, `repository`). Considered and not chosen: layered, vertical slices, microservices. Revisit adding Spring Modulith if module boundaries need enforcing.
+
+## UUIDv7 IDs, generated in the app
+
+Chose UUIDv7 (RFC 9562) for entity IDs, generated in Java rather than by the database. The leading timestamp keeps B-tree inserts sequential, which avoids the index fragmentation of random UUIDv4. UUIDs are also safe to expose in URLs (no guessable `/accounts/1042`) and can be created by the domain before saving, which suits idempotency and outbox events. Postgres 17 has no built-in `uuidv7()`, so a small library generates them.
+
+Gave up: `bigint` is smaller (8 bytes vs 16) and slightly faster. Revisit by moving to Postgres 18, which has a built-in `uuidv7()`.
+
+## Sign convention
+
+Postings are signed: positive = credit (money in), negative = debit (money out). An account's balance is the sum of its postings. Customer accounts are liabilities from the bank's perspective; system accounts such as clearing will usually be negative.
+
+## Stored balance column
+
+`account` keeps a `balance` and a `version`, updated in the same transaction as the postings. Postings stay the source of truth; a reconciliation job checks the column against them. The row can be locked for the funds check. `CHECK (balance >= 0)` applies to customer accounts only, since system accounts may go negative.
+
+Gave up: the risk of the column drifting from the postings.
+
+## VARCHAR + CHECK over Postgres ENUM
+
+`type` and `status` are `VARCHAR` with `CHECK` constraints. Postgres `ENUM` types are painful to change later.
+
+## TIMESTAMPTZ, always UTC
+
+All times are `TIMESTAMPTZ`, so each is an exact moment with no timezone ambiguity.
