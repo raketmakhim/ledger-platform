@@ -77,3 +77,16 @@ Gave up: the risk of the column drifting from the postings.
 ## TIMESTAMPTZ, always UTC
 
 All times are `TIMESTAMPTZ`, so each is an exact moment with no timezone ambiguity.
+
+## Open decisions
+
+Not decided yet. Each has a leaning, so the next step is to confirm or change it.
+
+1. **`Account` in the domain:** does it hold a `balance` and apply postings itself, or is the balance only a database column? Leaning: the domain `Account` holds a `Money` balance and applies postings, and a customer account can't go negative.
+2. **System accounts:** one clearing account per currency. Seeded by a migration, or created by the app when first needed? Leaning: seed them in a migration, so they always exist.
+3. **UUIDv7 generation:** a library (such as `uuid-creator`) or our own small implementation. Leaning: a library.
+4. **Persistence mapping:** ArchUnit keeps JPA out of `domain`, so separate JPA entities in the adapter need mapping to the domain objects. Hand-written mapper or MapStruct? Leaning: hand-written, since there are only a few classes.
+5. **Reversals:** how a reversal entry links to its original. Leaning: a nullable `reverses_entry_id` column on `journal_entry`.
+6. **Outbound payment limit:** ISO 20022 messages allow 18 total digits, narrower than our 20 integer digits. Decide the per-payment limit when building the Transfers API.
+
+Later, tracked in the roadmap: locking strategy, idempotency key expiry, authentication.

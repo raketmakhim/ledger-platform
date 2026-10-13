@@ -2,23 +2,29 @@
 
 ## 1. Ledger
 
-**Tables**
-- `account` (id, currency, type, status)
-- `journal_entry` (id, type, reference, created_at)
+**Status:** Mostly done. Left: `Account` domain object, and the clearing and funding flow.
+
+**Tables** (in `V1__init.sql`)
+- `account` (id, currency, type, status, balance, version, created_at). `type` is CUSTOMER or SYSTEM, and only SYSTEM accounts may go negative.
+- `journal_entry` (id, type, reference, created_at). `type` is an enum: DEPOSIT, TRANSFER, REVERSAL.
 - `posting` (id, entry_id, account_id, signed amount, currency)
 
-**Balance rule:** Enforce "postings sum to zero per currency" in a domain object (`JournalEntry` refuses to build if unbalanced). Optionally back it up with a deferred constraint trigger in the database.
+**IDs:** UUIDv7, generated in the app (see `decisions.md`). Not built yet.
 
-**Money value object**
-- Store amounts as `NUMERIC(24,4)` with a currency-aware scale (GBP 2, JPY 0).
-- Use `RoundingMode.HALF_EVEN`.
+**Balance rule:** Enforced in the domain: `JournalEntry` refuses to build unless it has at least 2 postings that sum to zero per currency. Done. Optionally back it up with a deferred constraint trigger in the database (not done).
+
+**Money value object** (done)
+- Stored as `NUMERIC(24,4)`, with a currency-aware scale (GBP 2, JPY 0). At most 20 digits before the decimal point.
+- Amounts with more decimals than the currency allows are rejected, not rounded. `RoundingMode.HALF_EVEN` only applies once we add `allocate` for splits.
 - Compare with `compareTo`, not `equals`: `new BigDecimal("1.0").equals(new BigDecimal("1.00"))` is false.
 
-**System accounts:** Money has to come from somewhere, so add a clearing or suspense account and fund customer accounts through it. Bank interviewers notice this detail.
+**System accounts:** Money has to come from somewhere, so add a clearing or suspense account and fund customer accounts through it. Bank interviewers notice this detail. Not built yet.
 
-**Sign convention:** Know which one you've used. Customer accounts are liabilities from the bank's perspective.
+**Sign convention** (decided): positive = credit (money in), negative = debit (money out). An account's balance is the sum of its postings. Customer accounts are liabilities from the bank's perspective.
 
 ## 2. Transfers API
+
+**Status:** Not started.
 
 **Validation**
 - Amount is positive.
@@ -33,6 +39,8 @@
 
 ## 3. Idempotency
 
+**Status:** Not started.
+
 **Table:** `idempotency_record` with key, client/principal, request hash, status, response code, response body and expiry.
 
 **Flow**
@@ -46,6 +54,8 @@
 - Scope keys per client, otherwise one user's key could collide with another's.
 
 ## 4. Concurrency
+
+**Status:** Not started.
 
 **Pessimistic locking:** `SELECT ... FOR UPDATE` on both accounts, always locked in ascending id order. The safer default for hot accounts.
 
@@ -64,6 +74,8 @@
 
 ## 5. Statements
 
+**Status:** Not started.
+
 **Pagination:** Keyset (cursor) pagination on `(created_at, id)` rather than offset. A common follow-up question.
 
 **Corrections:** A reversal is a new journal entry that links to the original. Revoke `UPDATE`/`DELETE` on the ledger tables at the database level to prove records are immutable.
@@ -72,11 +84,15 @@
 
 ## 6. Security
 
+**Status:** Not started.
+
 **Ownership checks:** A valid JWT isn't enough. The user must own the source account. This is broken object-level authorisation, the top OWASP API risk, and an easy win to talk about.
 
 **Local IdP:** Run Keycloak in docker-compose.
 
 ## 7. Events
+
+**Status:** Not started.
 
 **Outbox:** Write the outbox row in the same transaction as the postings.
 
@@ -89,6 +105,8 @@
 
 ## 8–9. Observability and docs
 
+**Status:** Not started.
+
 **Business metrics:** Expose transfers by outcome and insufficient-funds rate, not just JVM metrics.
 
 **Correlation IDs:** Use Micrometer Tracing to carry them into the MDC and Kafka headers.
@@ -96,6 +114,8 @@
 **API docs:** OpenAPI annotations are routine. Keep this phase brief.
 
 ## 10. Boot 4 migration
+
+**Status:** Not started.
 
 Expect these changes:
 - Spring Framework 7
