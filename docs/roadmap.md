@@ -10,7 +10,7 @@
 **Balance rule:** Enforce "postings sum to zero per currency" in a domain object (`JournalEntry` refuses to build if unbalanced). Optionally back it up with a deferred constraint trigger in the database.
 
 **Money value object**
-- Store amounts as `NUMERIC(19,4)` with a currency-aware scale (GBP 2, JPY 0).
+- Store amounts as `NUMERIC(24,4)` with a currency-aware scale (GBP 2, JPY 0).
 - Use `RoundingMode.HALF_EVEN`.
 - Compare with `compareTo`, not `equals`: `new BigDecimal("1.0").equals(new BigDecimal("1.00"))` is false.
 

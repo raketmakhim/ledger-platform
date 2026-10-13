@@ -46,6 +46,39 @@ class MoneyTest {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
+    @ParameterizedTest
+    @CsvSource({
+            "99999999999999999999.99,  GBP",
+            "-99999999999999999999.99, GBP",
+            "99999999999999999999,     JPY"
+    })
+    void acceptsLargestAllowedAmounts(String amount, String code) {
+        assertThat(new Money(new BigDecimal(amount), Currency.getInstance(code))).isNotNull();
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "100000000000000000000,    GBP",
+            "-100000000000000000000,   GBP",
+            "100000000000000000000,    JPY",
+            "1E+25,               GBP"
+    })
+    void rejectsAmountsTooLarge(String amount, String code) {
+        BigDecimal value = new BigDecimal(amount);
+        Currency currency = Currency.getInstance(code);
+
+        assertThatThrownBy(() -> new Money(value, currency))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void plusRejectsOverflowingResult() {
+        Money max = new Money(new BigDecimal("99999999999999999999.99"), GBP);
+
+        assertThatThrownBy(() -> max.plus(new Money(new BigDecimal("0.01"), GBP)))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
     @Test
     void sameValueWithDifferentScaleIsEqual() {
         assertThat(new Money(new BigDecimal("1.0"), GBP))

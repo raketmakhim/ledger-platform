@@ -10,6 +10,16 @@ public record Money(BigDecimal amount, Currency currency) implements Comparable<
         validCurrencyCheck(currency);
         decimalPlacesCheck(amount, currency);
         amount = amount.setScale(currency.getDefaultFractionDigits());
+        maxAmountCheck(amount);
+    }
+
+    // NUMERIC(24,4) holds 20 digits before the decimal point
+    private static final int MAX_INTEGER_DIGITS = 20;
+
+    private static void maxAmountCheck(BigDecimal amount){
+        if (amount.precision() - amount.scale() > MAX_INTEGER_DIGITS){
+            throw new IllegalArgumentException("Amount too large: " + amount);
+        }
     }
 
     public Money plus(Money other){
