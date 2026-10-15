@@ -69,6 +69,8 @@
 
 **Lock timeouts:** Set them so stuck requests fail fast rather than hang.
 
+**Hot clearing account:** every deposit in a currency updates that currency's one clearing account, so those deposits queue behind each other. Decide before the adapter exists: accept the limit and document it, or stop updating the clearing balance per deposit. Modern Treasury and TigerBeetle both treat hot accounts as the main contention problem. Modern Treasury's advice is to not lock them and to apply their balance asynchronously, and to lock only the user accounts that need a balance check. See `todo.md`.
+
 **Tests**
 - Fire N concurrent transfers with an `ExecutorService` and a `CountDownLatch` so they start together.
 - Assert total money in the system is unchanged and no balance went negative.

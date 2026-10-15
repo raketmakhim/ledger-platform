@@ -2,8 +2,10 @@ package com.raketmakhim.ledger.accounting.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.Currency;
 
 import org.junit.jupiter.api.Test;
@@ -86,6 +88,19 @@ class MoneyTest {
 
         assertThatThrownBy(() -> new Money(value, currency))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "1E+999999999",
+            "-1E+999999999",
+            "1E-999999999"
+    })
+    void rejectsHugeExponentsQuicklyInsteadOfBuildingAHugeNumber(String amount) {
+        BigDecimal value = new BigDecimal(amount);
+
+        assertTimeoutPreemptively(Duration.ofSeconds(2), () ->
+                assertThatThrownBy(() -> new Money(value, GBP)).isInstanceOf(IllegalArgumentException.class));
     }
 
     // ---- construction: nulls and bad currencies ----
