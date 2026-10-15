@@ -11,7 +11,7 @@
 
 **Account domain object** (done): `Account` holds a `Money` balance, and `applyPosting(posting)` returns a new `Account` with the balance changed. It rejects postings for another account or currency, on a non-ACTIVE account, or that would overdraw a customer account ("Insufficient funds"). It never changes the original, and `version` is left for the persistence layer to increment. Nothing yet connects a `JournalEntry` to its accounts: that coordination belongs to the transfer service (item 2).
 
-**IDs:** UUIDv7, generated in the app (see `decisions.md`). Not built yet.
+**IDs:** UUIDv7, generated in the app (see `decisions/data-model.md`). Not built yet.
 
 **Balance rule:** Enforced in the domain: `JournalEntry` refuses to build unless it has at least 2 postings that sum to zero per currency. Done. Optionally back it up with a deferred constraint trigger in the database (not done).
 
@@ -26,7 +26,7 @@
 
 ## 2. Transfers API
 
-**Status:** Not started.
+**Status:** Not started. The domain exceptions it will map to problem types already exist (`InsufficientFundsException`, `AccountNotActiveException`, `CurrencyMismatchException`, `UnbalancedEntryException`); the handler, the request validation and the transfer service are not built.
 
 **Validation**
 - Amount is positive.
