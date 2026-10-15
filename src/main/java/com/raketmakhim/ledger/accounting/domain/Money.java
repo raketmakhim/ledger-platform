@@ -52,7 +52,7 @@ public record Money(BigDecimal amount, Currency currency) implements Comparable<
 
     private void sameCurrencyCheck(Money other){
         if (!currency.equals(other.currency)){
-            throw new IllegalArgumentException("Currency mismatch: " + currency.getCurrencyCode() + " vs " + other.currency.getCurrencyCode());
+            throw new CurrencyMismatchException(currency, other.currency);
         }
     }
 

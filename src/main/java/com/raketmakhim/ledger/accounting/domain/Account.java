@@ -16,8 +16,9 @@ public record Account(UUID id, Currency currency, AccountType type, AccountStatu
     /**
      * Returns a new Account with the posting's signed amount added to the balance.
      * This account is left unchanged. Throws IllegalArgumentException if the posting
-     * is for another account or currency, the account is not ACTIVE, or a customer
-     * balance would go negative.
+     * is for another account, AccountNotActiveException if the account is not ACTIVE,
+     * CurrencyMismatchException for another currency, and InsufficientFundsException
+     * if a customer balance would go negative.
      * <p>
      * version is not changed here: the persistence layer increments it on save.
      */
@@ -26,13 +27,12 @@ public record Account(UUID id, Currency currency, AccountType type, AccountStatu
             throw new IllegalArgumentException("Posting is for a different account.");
         }
         if (status != AccountStatus.ACTIVE){
-            throw new IllegalArgumentException("Account is not active: " + status);
+            throw new AccountNotActiveException(status);
         }
         currencyCheck(currency, posting.amount());
         Money newBalance = balance.plus(posting.amount());
         if (!type.allowsNegativeBalance() && newBalance.isNegative()){
-            throw new IllegalArgumentException("Insufficient funds: balance " + balance.amount()
-                    + ", posting " + posting.amount().amount());
+            throw new InsufficientFundsException(balance, posting.amount());
         }
         return new Account(id, currency, type, status, newBalance, version, createdAt);
     }
@@ -46,8 +46,7 @@ public record Account(UUID id, Currency currency, AccountType type, AccountStatu
 
     private static void currencyCheck(Currency currency, Money money){
         if (!currency.equals(money.currency())){
-            throw new IllegalArgumentException("Currency mismatch: account is " + currency.getCurrencyCode()
-                    + ", amount is " + money.currency().getCurrencyCode());
+            throw new CurrencyMismatchException(currency, money.currency());
         }
     }
 

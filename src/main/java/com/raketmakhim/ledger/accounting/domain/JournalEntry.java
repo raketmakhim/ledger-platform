@@ -43,7 +43,7 @@ public record JournalEntry(UUID id, EntryType type, String reference, Instant cr
         }
         totals.forEach((currency, total) -> {
             if (total.signum() != 0){
-                throw new IllegalArgumentException("Postings do not balance for " + currency.getCurrencyCode() + ": " + total);
+                throw new UnbalancedEntryException(currency, total);
             }
         });
     }

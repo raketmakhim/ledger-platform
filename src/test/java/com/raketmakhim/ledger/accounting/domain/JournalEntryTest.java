@@ -38,7 +38,7 @@ class JournalEntryTest {
     @Test
     void rejectsUnbalancedPostings() {
         assertThatThrownBy(() -> entry(List.of(posting("-50", GBP), posting("40", GBP))))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(UnbalancedEntryException.class);
     }
 
     @Test
@@ -56,7 +56,16 @@ class JournalEntryTest {
     @Test
     void rejectsPostingsThatOnlyBalanceAcrossCurrencies() {
         assertThatThrownBy(() -> entry(List.of(posting("-50", GBP), posting("50", USD))))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(UnbalancedEntryException.class);
+    }
+
+    @Test
+    void unbalancedExceptionCarriesCurrencyAndTotal() {
+        assertThatThrownBy(() -> entry(List.of(posting("-50", GBP), posting("40", GBP))))
+                .isInstanceOfSatisfying(UnbalancedEntryException.class, e -> {
+                    assertThat(e.currency()).isEqualTo(GBP);
+                    assertThat(e.total()).isEqualByComparingTo("-10");
+                });
     }
 
     @Test

@@ -60,7 +60,7 @@ class AccountTest {
         Account account = account(AccountType.CUSTOMER, AccountStatus.ACTIVE, "100");
 
         assertThatThrownBy(() -> account.applyPosting(posting(account, gbp("-100.01"))))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(InsufficientFundsException.class);
     }
 
     @Test
@@ -82,8 +82,8 @@ class AccountTest {
         Account frozen = account(AccountType.CUSTOMER, AccountStatus.FROZEN, "100");
         Account closed = account(AccountType.CUSTOMER, AccountStatus.CLOSED, "100");
 
-        assertThatThrownBy(() -> frozen.applyPosting(posting(frozen, gbp("1")))).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> closed.applyPosting(posting(closed, gbp("1")))).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> frozen.applyPosting(posting(frozen, gbp("1")))).isInstanceOf(AccountNotActiveException.class);
+        assertThatThrownBy(() -> closed.applyPosting(posting(closed, gbp("1")))).isInstanceOf(AccountNotActiveException.class);
     }
 
     @Test
@@ -91,7 +91,28 @@ class AccountTest {
         Account account = account(AccountType.CUSTOMER, AccountStatus.ACTIVE, "100");
         Money dollars = new Money(BigDecimal.ONE, USD);
 
-        assertThatThrownBy(() -> account.applyPosting(posting(account, dollars))).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> account.applyPosting(posting(account, dollars))).isInstanceOf(CurrencyMismatchException.class);
+    }
+
+    @Test
+    void exceptionsCarryTheDetailsTheApiNeeds() {
+        Account customer = account(AccountType.CUSTOMER, AccountStatus.ACTIVE, "100");
+        Account frozen = account(AccountType.CUSTOMER, AccountStatus.FROZEN, "100");
+        Money dollars = new Money(BigDecimal.ONE, USD);
+
+        assertThatThrownBy(() -> customer.applyPosting(posting(customer, gbp("-150"))))
+                .isInstanceOfSatisfying(InsufficientFundsException.class, e -> {
+                    assertThat(e.balance()).isEqualTo(gbp("100"));
+                    assertThat(e.requested()).isEqualTo(gbp("-150"));
+                });
+        assertThatThrownBy(() -> frozen.applyPosting(posting(frozen, gbp("1"))))
+                .isInstanceOfSatisfying(AccountNotActiveException.class,
+                        e -> assertThat(e.status()).isEqualTo(AccountStatus.FROZEN));
+        assertThatThrownBy(() -> customer.applyPosting(posting(customer, dollars)))
+                .isInstanceOfSatisfying(CurrencyMismatchException.class, e -> {
+                    assertThat(e.expected()).isEqualTo(GBP);
+                    assertThat(e.actual()).isEqualTo(USD);
+                });
     }
 
     @Test
@@ -129,7 +150,7 @@ class AccountTest {
         assertThatThrownBy(() -> new Account(null, GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE, gbp("0"), 0, now))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> new Account(id, GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE, new Money(BigDecimal.ZERO, USD), 0, now))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(CurrencyMismatchException.class);
         assertThatThrownBy(() -> new Account(id, GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE, gbp("-1"), 0, now))
                 .isInstanceOf(IllegalArgumentException.class);
     }

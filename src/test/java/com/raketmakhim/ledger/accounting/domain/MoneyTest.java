@@ -115,8 +115,8 @@ class MoneyTest {
     void plusAndMinusRejectMixedCurrencies() {
         Money yen = new Money(BigDecimal.ONE, Currency.getInstance("JPY"));
 
-        assertThatThrownBy(() -> gbp("1").plus(yen)).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> gbp("1").minus(yen)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> gbp("1").plus(yen)).isInstanceOf(CurrencyMismatchException.class);
+        assertThatThrownBy(() -> gbp("1").minus(yen)).isInstanceOf(CurrencyMismatchException.class);
     }
 
     @Test
@@ -145,7 +145,7 @@ class MoneyTest {
     void compareToRejectsMixedCurrencies() {
         Money yen = new Money(BigDecimal.ONE, Currency.getInstance("JPY"));
 
-        assertThatThrownBy(() -> gbp("1").compareTo(yen)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> gbp("1").compareTo(yen)).isInstanceOf(CurrencyMismatchException.class);
     }
 
     @Test
