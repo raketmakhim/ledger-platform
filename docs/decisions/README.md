@@ -4,7 +4,7 @@ One short section per decision, with what we chose and what we gave up.
 
 - [Tooling and build](tooling.md): Maven, Java 21, Spring Boot 3.5, Flyway, Testcontainers, Postgres 17.
 - [Data model and database](data-model.md): Postgres, UUIDv7, sign convention, stored balance, clearing accounts, reversals.
-- [Architecture and domain code](architecture.md): hexagonal layout, `Account`, exceptions, mappers.
+- [Architecture and domain code](architecture.md): hexagonal layout, `Account`, exceptions, mappers, ports, time and ids.
 
 ## Open decisions
 

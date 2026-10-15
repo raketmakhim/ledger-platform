@@ -12,7 +12,7 @@ CREATE TABLE account (
 CREATE TABLE journal_entry (
     id          UUID PRIMARY KEY,
     type        VARCHAR(30)     NOT NULL CHECK (type IN ('DEPOSIT', 'TRANSFER', 'REVERSAL')),
-    reference   VARCHAR(100)    NOT NULL,
+    reference   VARCHAR(36)     NOT NULL,
     created_at  TIMESTAMPTZ     NOT NULL DEFAULT now()
 );
 

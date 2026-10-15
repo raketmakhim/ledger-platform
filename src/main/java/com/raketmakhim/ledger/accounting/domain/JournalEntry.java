@@ -13,6 +13,7 @@ public record JournalEntry(UUID id, EntryType type, String reference, Instant cr
     public JournalEntry {
         nullChecks(id, type, reference, createdAt, postings);
         blankCheck(reference);
+        referenceLengthCheck(reference);
         postings = List.copyOf(postings);
         minimumPostingsCheck(postings);
         balanceCheck(postings);
@@ -27,6 +28,15 @@ public record JournalEntry(UUID id, EntryType type, String reference, Instant cr
     private static void blankCheck(String reference){
         if (reference.isBlank()){
             throw new IllegalArgumentException("Reference cannot be blank.");
+        }
+    }
+
+    // ISO 20022 ids are at most 35 characters, and a UETR is 36. V1__init.sql has a matching VARCHAR(36).
+    private static final int MAX_REFERENCE_LENGTH = 36;
+
+    private static void referenceLengthCheck(String reference){
+        if (reference.length() > MAX_REFERENCE_LENGTH){
+            throw new IllegalArgumentException("Reference is longer than " + MAX_REFERENCE_LENGTH + " characters.");
         }
     }
 

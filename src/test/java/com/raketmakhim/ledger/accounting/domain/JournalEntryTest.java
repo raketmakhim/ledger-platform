@@ -83,6 +83,17 @@ class JournalEntryTest {
     }
 
     @Test
+    void acceptsReferenceUpToTheLimitAndRejectsLonger() {
+        List<Posting> ok = List.of(posting("-5", GBP), posting("5", GBP));
+        UUID id = UUID.randomUUID();
+        Instant now = Instant.now();
+
+        assertThat(new JournalEntry(id, EntryType.TRANSFER, "a".repeat(36), now, ok)).isNotNull();
+        assertThatThrownBy(() -> new JournalEntry(id, EntryType.TRANSFER, "a".repeat(37), now, ok))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void postingsCannotBeChangedAfterBuilding() {
         List<Posting> mutable = new ArrayList<>(List.of(posting("-5", GBP), posting("5", GBP)));
         JournalEntry entry = entry(mutable);

@@ -25,3 +25,15 @@ Gave up: a few more classes, and the API handler has to know each one. Add a new
 ArchUnit keeps JPA out of `domain`, so the database adapter has its own JPA entities and maps them to and from the domain objects with plain hand-written mapper classes, not MapStruct. There are only a few classes (`Account`, `JournalEntry`, `Posting`), `Money` is two columns, and the domain objects are immutable records with validating constructors, so most of the mapping needs custom code even with MapStruct. Hand-written code is plain Java: easy to read, debug and test, with no extra dependency or annotation-processor setup. Mapping back to the domain runs the constructor checks again, so a corrupt row fails when loaded.
 
 Gave up: boilerplate, and a field added to a table must also be added to the mapper (tests should assert every field). MapStruct is the more common tool for cutting this boilerplate. Revisit if the number of mapped classes grows.
+
+## Application layer: plain outbound port interfaces, no inbound interfaces
+
+The `application` package holds the services (such as a deposit service) and the interfaces they depend on, called ports: for example `AccountRepository` (find an account, find the clearing account for a currency, save). The database adapter implements them. Ports are plain interfaces with no `Port` suffix. We do not add separate inbound "use case" interfaces: the service class is the entry point, because an interface for every service is over-engineering at this size. This follows the usual hexagonal convention (outbound ports as repository-style interfaces, implemented by adapters), though the naming varies between teams.
+
+Gave up: a controller depends on the concrete service class, so swapping the service means editing the controller. Add an inbound interface only if a second implementation or a real need appears.
+
+## Time and IDs are injected
+
+Code that needs the current time takes a `java.time.Clock`, and code that needs a new id takes a small `IdGenerator` interface, whose implementation uses `java-uuid-generator` (see `data-model.md`). Both are passed in by the application layer, so tests use `Clock.fixed(...)` and a predictable generator. The domain objects keep taking `id` and `createdAt` as plain constructor arguments and never read the clock or generate ids themselves.
+
+Gave up: a few extra constructor parameters. The `IdGenerator` interface is our own suggestion: the research found no standard for an id-generator port.
