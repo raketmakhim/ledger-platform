@@ -27,6 +27,7 @@ import com.raketmakhim.ledger.accounting.domain.CurrencyMismatchException;
 import com.raketmakhim.ledger.accounting.domain.EntryType;
 import com.raketmakhim.ledger.accounting.domain.JournalEntry;
 import com.raketmakhim.ledger.accounting.domain.Money;
+import com.raketmakhim.ledger.accounting.domain.UnsupportedCurrencyException;
 
 class DepositServiceTest {
 
@@ -150,10 +151,13 @@ class DepositServiceTest {
     }
 
     @Test
-    void rejectsMissingClearingAccount() {
+    void rejectsCurrencyWithNoClearingAccount() {
         accounts.remove(CLEARING_ID);
 
-        assertThatThrownBy(() -> service.deposit(CUSTOMER_ID, gbp("10"), "r")).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> service.deposit(CUSTOMER_ID, gbp("10"), "r"))
+                .isInstanceOfSatisfying(UnsupportedCurrencyException.class,
+                        e -> assertThat(e.currency()).isEqualTo(GBP));
+        assertThat(savedEntries).isEmpty();
     }
 
     @Test

@@ -11,6 +11,7 @@ import com.raketmakhim.ledger.accounting.domain.EntryType;
 import com.raketmakhim.ledger.accounting.domain.JournalEntry;
 import com.raketmakhim.ledger.accounting.domain.Money;
 import com.raketmakhim.ledger.accounting.domain.Posting;
+import com.raketmakhim.ledger.accounting.domain.UnsupportedCurrencyException;
 
 /**
  * Puts money into a customer account, funded through the bank's clearing account for that currency.
@@ -36,7 +37,7 @@ public class DepositService {
         Account customer = accounts.findById(accountId).orElseThrow(() -> new AccountNotFoundException(accountId));
         customerAccountCheck(customer);
         Account clearing = accounts.findClearingAccount(amount.currency()).orElseThrow(
-                () -> new IllegalStateException("No clearing account for " + amount.currency().getCurrencyCode()));
+                () -> new UnsupportedCurrencyException(amount.currency()));
 
         Posting clearingPosting = new Posting(ids.newId(), clearing.id(), amount.negate());
         Posting customerPosting = new Posting(ids.newId(), customer.id(), amount);

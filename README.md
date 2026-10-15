@@ -53,14 +53,14 @@ The health endpoint is available at http://localhost:8080/actuator/health.
 src/main/java/com/raketmakhim/ledger/accounting/domain   Plain-Java domain: Money, Posting, JournalEntry, Account
 src/main/resources                                       Configuration (application.yaml) and Flyway migrations (db/migration)
 src/test/java/com/raketmakhim/ledger                     Tests, ArchUnit rules and Testcontainers setup
-docs/                                                    decisions/, roadmap.md, standards.md, todo.md
+docs/                                                    overview.md, decisions/, roadmap.md, standards.md, todo.md
 ```
 
 The code follows a hexagonal layout, grouped by feature. The `domain` package must not depend on Spring or JPA, and a test enforces that.
 
 ## Status
 
-Early development. The domain model and the first database migration are in place and tested. There is no API or persistence layer yet. See [docs/roadmap.md](docs/roadmap.md) for what's next and [docs/decisions/README.md](docs/decisions/README.md) for why things are the way they are.
+Early development. The domain model and the first database migration are in place and tested. There is no API or persistence layer yet. See [docs/overview.md](docs/overview.md) for a tour of the code, [docs/roadmap.md](docs/roadmap.md) for what's next and [docs/decisions/README.md](docs/decisions/README.md) for why things are the way they are.
 
 ## License
 
