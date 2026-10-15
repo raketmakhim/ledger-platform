@@ -1,6 +1,8 @@
-package com.raketmakhim.ledger.accounting.domain;
+package com.raketmakhim.ledger.accounting.domain.money;
 
 import java.util.Currency;
+
+import com.raketmakhim.ledger.accounting.domain.DomainException;
 
 public class CurrencyMismatchException extends DomainException {
 

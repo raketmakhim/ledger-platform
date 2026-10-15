@@ -4,14 +4,14 @@ import java.time.Clock;
 import java.util.List;
 import java.util.UUID;
 
-import com.raketmakhim.ledger.accounting.domain.Account;
-import com.raketmakhim.ledger.accounting.domain.AccountNotFoundException;
-import com.raketmakhim.ledger.accounting.domain.AccountType;
-import com.raketmakhim.ledger.accounting.domain.EntryType;
-import com.raketmakhim.ledger.accounting.domain.JournalEntry;
-import com.raketmakhim.ledger.accounting.domain.Money;
-import com.raketmakhim.ledger.accounting.domain.Posting;
-import com.raketmakhim.ledger.accounting.domain.UnsupportedCurrencyException;
+import com.raketmakhim.ledger.accounting.domain.account.Account;
+import com.raketmakhim.ledger.accounting.domain.account.AccountNotFoundException;
+import com.raketmakhim.ledger.accounting.domain.account.AccountType;
+import com.raketmakhim.ledger.accounting.domain.journal.EntryType;
+import com.raketmakhim.ledger.accounting.domain.journal.JournalEntry;
+import com.raketmakhim.ledger.accounting.domain.journal.Posting;
+import com.raketmakhim.ledger.accounting.domain.money.Money;
+import com.raketmakhim.ledger.accounting.domain.money.UnsupportedCurrencyException;
 
 /**
  * Puts money into a customer account, funded through the bank's clearing account for that currency.

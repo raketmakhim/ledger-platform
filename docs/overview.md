@@ -22,6 +22,19 @@ An ArchUnit test fails the build if anything in `domain` imports Spring or JPA.
 
 ## Domain (`accounting/domain`)
 
+Split into three packages by concept, plus the shared base exception:
+
+```
+domain/
+  DomainException
+  money/     Money, CurrencyMismatchException, UnsupportedCurrencyException
+  account/   Account, AccountType, AccountStatus,
+             AccountNotActiveException, AccountNotFoundException, InsufficientFundsException
+  journal/   JournalEntry, Posting, EntryType, UnbalancedEntryException
+```
+
+`account` uses `journal` and `money`, `journal` uses `money`, and `money` uses nothing, so there are no cycles. Each enum and exception sits next to the class it belongs to.
+
 | Class | What it is |
 |---|---|
 | `Money` | An amount plus a currency. Immutable. The scale is fixed by the currency (GBP 2, JPY 0), extra decimals are rejected rather than rounded, and amounts are capped at 20 digits before the decimal point. Compare with `compareTo`, never `equals` on the raw number. |

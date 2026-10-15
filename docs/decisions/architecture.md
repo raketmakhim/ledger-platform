@@ -37,3 +37,9 @@ Gave up: a controller depends on the concrete service class, so swapping the ser
 Code that needs the current time takes a `java.time.Clock`, and code that needs a new id takes a small `IdGenerator` interface, whose implementation uses `java-uuid-generator` (see `data-model.md`). Both are passed in by the application layer, so tests use `Clock.fixed(...)` and a predictable generator. The domain objects keep taking `id` and `createdAt` as plain constructor arguments and never read the clock or generate ids themselves.
 
 Gave up: a few extra constructor parameters. The `IdGenerator` interface is our own suggestion: the research found no standard for an id-generator port.
+
+## Domain split into money, account and journal packages
+
+The domain had grown to 14 files, so it is split by concept into `money`, `account` and `journal`, with `DomainException` at the top. Each enum and exception sits next to the class it belongs to, not in a package of enums or exceptions. The dependencies point one way: `account` uses `journal` and `money`, `journal` uses `money`, and `money` uses nothing. The ArchUnit rule (`..domain..`) covers every sub-package.
+
+Gave up: a few more imports, and classes that cross packages must be public. Revisit if a package grows past about 10 files.

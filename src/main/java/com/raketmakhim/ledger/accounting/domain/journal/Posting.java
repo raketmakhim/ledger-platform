@@ -1,6 +1,8 @@
-package com.raketmakhim.ledger.accounting.domain;
+package com.raketmakhim.ledger.accounting.domain.journal;
 
 import java.util.UUID;
+
+import com.raketmakhim.ledger.accounting.domain.money.Money;
 
 /**
  * One account's side of a journal entry: a signed amount applied to a single account.

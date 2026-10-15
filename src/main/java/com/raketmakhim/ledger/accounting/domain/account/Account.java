@@ -1,8 +1,12 @@
-package com.raketmakhim.ledger.accounting.domain;
+package com.raketmakhim.ledger.accounting.domain.account;
 
 import java.time.Instant;
 import java.util.Currency;
 import java.util.UUID;
+
+import com.raketmakhim.ledger.accounting.domain.journal.Posting;
+import com.raketmakhim.ledger.accounting.domain.money.CurrencyMismatchException;
+import com.raketmakhim.ledger.accounting.domain.money.Money;
 
 public record Account(UUID id, Currency currency, AccountType type, AccountStatus status,
                       Money balance, long version, Instant createdAt) {

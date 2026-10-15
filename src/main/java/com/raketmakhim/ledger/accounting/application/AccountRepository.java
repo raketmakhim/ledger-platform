@@ -4,7 +4,7 @@ import java.util.Currency;
 import java.util.Optional;
 import java.util.UUID;
 
-import com.raketmakhim.ledger.accounting.domain.Account;
+import com.raketmakhim.ledger.accounting.domain.account.Account;
 
 /** Outbound port: how the application finds and stores accounts. The database adapter implements it. */
 public interface AccountRepository {

@@ -1,4 +1,6 @@
-package com.raketmakhim.ledger.accounting.domain;
+package com.raketmakhim.ledger.accounting.domain.account;
+
+import com.raketmakhim.ledger.accounting.domain.DomainException;
 
 public class AccountNotActiveException extends DomainException {
 

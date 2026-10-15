@@ -18,16 +18,16 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.raketmakhim.ledger.accounting.domain.Account;
-import com.raketmakhim.ledger.accounting.domain.AccountNotActiveException;
-import com.raketmakhim.ledger.accounting.domain.AccountNotFoundException;
-import com.raketmakhim.ledger.accounting.domain.AccountStatus;
-import com.raketmakhim.ledger.accounting.domain.AccountType;
-import com.raketmakhim.ledger.accounting.domain.CurrencyMismatchException;
-import com.raketmakhim.ledger.accounting.domain.EntryType;
-import com.raketmakhim.ledger.accounting.domain.JournalEntry;
-import com.raketmakhim.ledger.accounting.domain.Money;
-import com.raketmakhim.ledger.accounting.domain.UnsupportedCurrencyException;
+import com.raketmakhim.ledger.accounting.domain.account.Account;
+import com.raketmakhim.ledger.accounting.domain.account.AccountNotActiveException;
+import com.raketmakhim.ledger.accounting.domain.account.AccountNotFoundException;
+import com.raketmakhim.ledger.accounting.domain.account.AccountStatus;
+import com.raketmakhim.ledger.accounting.domain.account.AccountType;
+import com.raketmakhim.ledger.accounting.domain.journal.EntryType;
+import com.raketmakhim.ledger.accounting.domain.journal.JournalEntry;
+import com.raketmakhim.ledger.accounting.domain.money.CurrencyMismatchException;
+import com.raketmakhim.ledger.accounting.domain.money.Money;
+import com.raketmakhim.ledger.accounting.domain.money.UnsupportedCurrencyException;
 
 class DepositServiceTest {
 

@@ -1,6 +1,8 @@
-package com.raketmakhim.ledger.accounting.domain;
+package com.raketmakhim.ledger.accounting.domain.account;
 
 import java.util.UUID;
+
+import com.raketmakhim.ledger.accounting.domain.DomainException;
 
 public class AccountNotFoundException extends DomainException {
 

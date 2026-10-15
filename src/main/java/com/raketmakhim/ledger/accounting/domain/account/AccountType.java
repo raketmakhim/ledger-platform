@@ -1,4 +1,4 @@
-package com.raketmakhim.ledger.accounting.domain;
+package com.raketmakhim.ledger.accounting.domain.account;
 
 public enum AccountType {
     CUSTOMER(false),

@@ -1,4 +1,4 @@
-package com.raketmakhim.ledger.accounting.domain;
+package com.raketmakhim.ledger.accounting.domain.money;
 
 import java.math.BigDecimal;
 import java.util.Currency;

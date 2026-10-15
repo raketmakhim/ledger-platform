@@ -1,4 +1,4 @@
-package com.raketmakhim.ledger.accounting.domain;
+package com.raketmakhim.ledger.accounting.domain.journal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -8,6 +8,8 @@ import java.util.Currency;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
+
+import com.raketmakhim.ledger.accounting.domain.money.Money;
 
 class PostingTest {
 

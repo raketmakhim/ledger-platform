@@ -1,7 +1,9 @@
-package com.raketmakhim.ledger.accounting.domain;
+package com.raketmakhim.ledger.accounting.domain.journal;
 
 import java.math.BigDecimal;
 import java.util.Currency;
+
+import com.raketmakhim.ledger.accounting.domain.DomainException;
 
 public class UnbalancedEntryException extends DomainException {
 

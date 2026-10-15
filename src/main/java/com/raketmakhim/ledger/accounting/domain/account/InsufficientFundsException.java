@@ -1,4 +1,7 @@
-package com.raketmakhim.ledger.accounting.domain;
+package com.raketmakhim.ledger.accounting.domain.account;
+
+import com.raketmakhim.ledger.accounting.domain.DomainException;
+import com.raketmakhim.ledger.accounting.domain.money.Money;
 
 public class InsufficientFundsException extends DomainException {
 

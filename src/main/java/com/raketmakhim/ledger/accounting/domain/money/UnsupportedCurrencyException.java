@@ -1,6 +1,8 @@
-package com.raketmakhim.ledger.accounting.domain;
+package com.raketmakhim.ledger.accounting.domain.money;
 
 import java.util.Currency;
+
+import com.raketmakhim.ledger.accounting.domain.DomainException;
 
 /** No clearing account exists for the currency, so the bank does not handle it. */
 public class UnsupportedCurrencyException extends DomainException {

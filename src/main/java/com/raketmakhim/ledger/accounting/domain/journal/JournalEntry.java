@@ -1,4 +1,4 @@
-package com.raketmakhim.ledger.accounting.domain;
+package com.raketmakhim.ledger.accounting.domain.journal;
 
 import java.math.BigDecimal;
 import java.time.Instant;
