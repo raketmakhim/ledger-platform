@@ -30,7 +30,7 @@ public record Account(UUID id, Currency currency, AccountType type, AccountStatu
         }
         currencyCheck(currency, posting.amount());
         Money newBalance = balance.plus(posting.amount());
-        if (type == AccountType.CUSTOMER && newBalance.isNegative()){
+        if (!type.allowsNegativeBalance() && newBalance.isNegative()){
             throw new IllegalArgumentException("Insufficient funds: balance " + balance.amount()
                     + ", posting " + posting.amount().amount());
         }
@@ -52,7 +52,7 @@ public record Account(UUID id, Currency currency, AccountType type, AccountStatu
     }
 
     private static void overdraftCheck(AccountType type, Money balance){
-        if (type == AccountType.CUSTOMER && balance.isNegative()){
+        if (!type.allowsNegativeBalance() && balance.isNegative()){
             throw new IllegalArgumentException("Invalid account: a customer account cannot be created with a negative balance: " + balance.amount());
         }
     }

@@ -2,12 +2,14 @@
 
 ## 1. Ledger
 
-**Status:** Mostly done. Left: `Account` domain object, and the clearing and funding flow.
+**Status:** Domain objects done (`Money`, `Posting`, `JournalEntry`, `Account`). Left: the clearing and funding flow, UUIDv7 generation, and the optional database trigger.
 
 **Tables** (in `V1__init.sql`)
 - `account` (id, currency, type, status, balance, version, created_at). `type` is CUSTOMER or SYSTEM, and only SYSTEM accounts may go negative.
 - `journal_entry` (id, type, reference, created_at). `type` is an enum: DEPOSIT, TRANSFER, REVERSAL.
 - `posting` (id, entry_id, account_id, signed amount, currency)
+
+**Account domain object** (done): `Account` holds a `Money` balance, and `applyPosting(posting)` returns a new `Account` with the balance changed. It rejects postings for another account or currency, on a non-ACTIVE account, or that would overdraw a customer account ("Insufficient funds"). It never changes the original, and `version` is left for the persistence layer to increment. Nothing yet connects a `JournalEntry` to its accounts: that coordination belongs to the transfer service (item 2).
 
 **IDs:** UUIDv7, generated in the app (see `decisions.md`). Not built yet.
 
@@ -18,7 +20,7 @@
 - Amounts with more decimals than the currency allows are rejected, not rounded. `RoundingMode.HALF_EVEN` only applies once we add `allocate` for splits.
 - Compare with `compareTo`, not `equals`: `new BigDecimal("1.0").equals(new BigDecimal("1.00"))` is false.
 
-**System accounts:** Money has to come from somewhere, so add a clearing or suspense account and fund customer accounts through it. Bank interviewers notice this detail. Not built yet.
+**System accounts:** Money has to come from somewhere, so there is a clearing account per currency (GBP, EUR, USD, JPY), seeded in `V1__init.sql`, and customer accounts are funded through them. Bank interviewers notice this detail. The funding flow itself is not built yet.
 
 **Sign convention** (decided): positive = credit (money in), negative = debit (money out). An account's balance is the sum of its postings. Customer accounts are liabilities from the bank's perspective.
 

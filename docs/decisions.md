@@ -78,15 +78,30 @@ Gave up: the risk of the column drifting from the postings.
 
 All times are `TIMESTAMPTZ`, so each is an exact moment with no timezone ambiguity.
 
+## Account holds its balance and applies postings
+
+`Account` holds a `Money` balance, and `applyPosting(posting)` returns a new `Account` with the balance changed, leaving the original untouched. It rejects postings for another account or currency, on a non-ACTIVE account, and ones that would overdraw a customer account ("Insufficient funds"). The constructor also rejects a customer account created with a negative balance, as a safety net. Keeping the balance in the domain means these rules are unit-testable without a database, and the database `balance` column is the stored copy of it.
+
+Gave up: the account doing its own bookkeeping means the transfer service has to coordinate saving all the changed accounts together in one database transaction. `version` is not changed by `applyPosting`: the persistence layer increments it on save.
+
+## Clearing accounts seeded for GBP, EUR, USD and JPY
+
+There is one `SYSTEM` clearing account per currency, created by `V1__init.sql` with fixed ids, and a partial unique index (`account_system_currency_idx`) stops a second one for the same currency. Deposits are funded through them, so they go negative: each one's balance mirrors the customer money held in that currency. Banks and ERP systems (Oracle GL, Sage) generally set these accounts up deliberately in advance, and seeding avoids a create-on-first-use race and a typo quietly creating a new system account. JPY is included to exercise the zero-decimal currency path in the real database.
+
+Gave up: supporting a new currency needs a new migration. The unique index also means one system account per currency, so a fee or suspense account later needs a `purpose` column and a changed index.
+
+## java-uuid-generator for UUIDv7
+
+Use a library to generate UUIDv7 ids, not our own code: ids are not where the learning is, and a time-ordered UUID done wrong (clock ordering, randomness) is an easy bug. Chose `com.fasterxml.uuid:java-uuid-generator` (5.2.0, last released December 2025, from the FasterXML/Jackson maintainers). The other candidate, `uuid-creator` (6.1.1), was last released April 2025. Both support UUIDv7. The dependency is added when the first code that creates ids is written, and ids are generated outside `domain` objects' own checks, so `domain` stays plain Java.
+
+Gave up: nothing much. A small extra dependency. Revisit if Postgres 18's built-in `uuidv7()` is adopted.
+
 ## Open decisions
 
 Not decided yet. Each has a leaning, so the next step is to confirm or change it.
 
-1. **`Account` in the domain:** does it hold a `balance` and apply postings itself, or is the balance only a database column? Leaning: the domain `Account` holds a `Money` balance and applies postings, and a customer account can't go negative.
-2. **System accounts:** one clearing account per currency. Seeded by a migration, or created by the app when first needed? Leaning: seed them in a migration, so they always exist.
-3. **UUIDv7 generation:** a library (such as `uuid-creator`) or our own small implementation. Leaning: a library.
-4. **Persistence mapping:** ArchUnit keeps JPA out of `domain`, so separate JPA entities in the adapter need mapping to the domain objects. Hand-written mapper or MapStruct? Leaning: hand-written, since there are only a few classes.
-5. **Reversals:** how a reversal entry links to its original. Leaning: a nullable `reverses_entry_id` column on `journal_entry`.
-6. **Outbound payment limit:** ISO 20022 messages allow 18 total digits, narrower than our 20 integer digits. Decide the per-payment limit when building the Transfers API.
+1. **Persistence mapping:** ArchUnit keeps JPA out of `domain`, so separate JPA entities in the adapter need mapping to the domain objects. Hand-written mapper or MapStruct? Leaning: hand-written, since there are only a few classes.
+2. **Reversals:** how a reversal entry links to its original. Leaning: a nullable `reverses_entry_id` column on `journal_entry`.
+3. **Outbound payment limit:** ISO 20022 messages allow 18 total digits, narrower than our 20 integer digits. Decide the per-payment limit when building the Transfers API.
 
 Later, tracked in the roadmap: locking strategy, idempotency key expiry, authentication.

@@ -26,3 +26,13 @@ CREATE TABLE posting (
 
 CREATE INDEX posting_entry_id_idx   ON posting (entry_id);
 CREATE INDEX posting_account_id_idx ON posting (account_id);
+
+-- One clearing account per currency. Customer deposits are funded through these,
+-- so they go negative. Fixed ids because the app looks them up by type and currency.
+CREATE UNIQUE INDEX account_system_currency_idx ON account (currency) WHERE type = 'SYSTEM';
+
+INSERT INTO account (id, currency, type, status) VALUES
+    ('00000000-0000-7000-8000-000000000001', 'GBP', 'SYSTEM', 'ACTIVE'),
+    ('00000000-0000-7000-8000-000000000002', 'EUR', 'SYSTEM', 'ACTIVE'),
+    ('00000000-0000-7000-8000-000000000003', 'USD', 'SYSTEM', 'ACTIVE'),
+    ('00000000-0000-7000-8000-000000000004', 'JPY', 'SYSTEM', 'ACTIVE');
