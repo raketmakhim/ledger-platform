@@ -44,6 +44,10 @@ public record Money(BigDecimal amount, Currency currency) implements Comparable<
         return amount.signum() < 0;
     }
 
+    public boolean isPositive(){
+        return amount.signum() > 0;
+    }
+
     @Override
     public int compareTo(Money other){
         sameCurrencyCheck(other);

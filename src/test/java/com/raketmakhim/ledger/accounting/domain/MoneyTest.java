@@ -13,6 +13,13 @@ import org.junit.jupiter.params.provider.CsvSource;
 class MoneyTest {
 
     private static final Currency GBP = Currency.getInstance("GBP");
+    private static final Currency JPY = Currency.getInstance("JPY");
+
+    private static Money gbp(String amount) {
+        return new Money(new BigDecimal(amount), GBP);
+    }
+
+    // ---- construction: decimals ----
 
     @ParameterizedTest
     @CsvSource({
@@ -23,7 +30,8 @@ class MoneyTest {
             "0,      GBP, 2",
             "-1.25,  GBP, 2",
             "5,      JPY, 0",
-            "100,    JPY, 0"
+            "100,    JPY, 0",
+            "1.2345, CLF, 4"
     })
     void acceptsValidAmounts(String amount, String code, int expectedScale) {
         Money money = new Money(new BigDecimal(amount), Currency.getInstance(code));
@@ -33,10 +41,11 @@ class MoneyTest {
 
     @ParameterizedTest
     @CsvSource({
-            "1.505, GBP",
-            "0.001, GBP",
-            "5.5,   JPY",
-            "0.1,   JPY"
+            "1.505,   GBP",
+            "0.001,   GBP",
+            "5.5,     JPY",
+            "0.1,     JPY",
+            "1.23456, CLF"
     })
     void rejectsTooManyDecimals(String amount, String code) {
         BigDecimal value = new BigDecimal(amount);
@@ -45,6 +54,14 @@ class MoneyTest {
         assertThatThrownBy(() -> new Money(value, currency))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    void sameValueWithDifferentScaleIsEqual() {
+        assertThat(new Money(new BigDecimal("1.0"), GBP))
+                .isEqualTo(new Money(new BigDecimal("1.00"), GBP));
+    }
+
+    // ---- construction: size ----
 
     @ParameterizedTest
     @CsvSource({
@@ -58,10 +75,10 @@ class MoneyTest {
 
     @ParameterizedTest
     @CsvSource({
-            "100000000000000000000,    GBP",
-            "-100000000000000000000,   GBP",
-            "100000000000000000000,    JPY",
-            "1E+25,               GBP"
+            "100000000000000000000,  GBP",
+            "-100000000000000000000, GBP",
+            "100000000000000000000,  JPY",
+            "1E+25,                  GBP"
     })
     void rejectsAmountsTooLarge(String amount, String code) {
         BigDecimal value = new BigDecimal(amount);
@@ -71,19 +88,7 @@ class MoneyTest {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
-    @Test
-    void plusRejectsOverflowingResult() {
-        Money max = new Money(new BigDecimal("99999999999999999999.99"), GBP);
-
-        assertThatThrownBy(() -> max.plus(new Money(new BigDecimal("0.01"), GBP)))
-                .isInstanceOf(IllegalArgumentException.class);
-    }
-
-    @Test
-    void sameValueWithDifferentScaleIsEqual() {
-        assertThat(new Money(new BigDecimal("1.0"), GBP))
-                .isEqualTo(new Money(new BigDecimal("1.00"), GBP));
-    }
+    // ---- construction: nulls and bad currencies ----
 
     @Test
     void rejectsNullAmount() {
@@ -97,9 +102,15 @@ class MoneyTest {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
-    private static Money gbp(String amount) {
-        return new Money(new BigDecimal(amount), GBP);
+    @Test
+    void rejectsPseudoCurrency() {
+        Currency xxx = Currency.getInstance("XXX");
+
+        assertThatThrownBy(() -> new Money(BigDecimal.ONE, xxx))
+                .isInstanceOf(IllegalArgumentException.class);
     }
+
+    // ---- arithmetic ----
 
     @Test
     void plusAddsAmounts() {
@@ -112,27 +123,51 @@ class MoneyTest {
     }
 
     @Test
-    void plusAndMinusRejectMixedCurrencies() {
-        Money yen = new Money(BigDecimal.ONE, Currency.getInstance("JPY"));
-
-        assertThatThrownBy(() -> gbp("1").plus(yen)).isInstanceOf(CurrencyMismatchException.class);
-        assertThatThrownBy(() -> gbp("1").minus(yen)).isInstanceOf(CurrencyMismatchException.class);
-    }
-
-    @Test
     void negateFlipsSign() {
         assertThat(gbp("5").negate()).isEqualTo(gbp("-5"));
         assertThat(gbp("-5").negate()).isEqualTo(gbp("5"));
     }
 
     @Test
-    void zeroAndNegativeChecks() {
+    void plusRejectsOverflowingResult() {
+        Money max = gbp("99999999999999999999.99");
+
+        assertThatThrownBy(() -> max.plus(gbp("0.01")))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void plusAndMinusRejectMixedCurrencies() {
+        Money yen = new Money(BigDecimal.ONE, JPY);
+
+        assertThatThrownBy(() -> gbp("1").plus(yen)).isInstanceOf(CurrencyMismatchException.class);
+        assertThatThrownBy(() -> gbp("1").minus(yen)).isInstanceOf(CurrencyMismatchException.class);
+    }
+
+    // ---- sign checks ----
+
+    @Test
+    void positiveCheck() {
+        assertThat(gbp("0.01").isPositive()).isTrue();
+        assertThat(gbp("0").isPositive()).isFalse();
+        assertThat(gbp("-0.01").isPositive()).isFalse();
+    }
+
+    @Test
+    void zeroCheck() {
         assertThat(gbp("0").isZero()).isTrue();
         assertThat(gbp("0.01").isZero()).isFalse();
+        assertThat(gbp("-0.01").isZero()).isFalse();
+    }
+
+    @Test
+    void negativeCheck() {
         assertThat(gbp("-0.01").isNegative()).isTrue();
         assertThat(gbp("0").isNegative()).isFalse();
         assertThat(gbp("0.01").isNegative()).isFalse();
     }
+
+    // ---- comparison ----
 
     @Test
     void compareToOrdersByAmount() {
@@ -143,16 +178,8 @@ class MoneyTest {
 
     @Test
     void compareToRejectsMixedCurrencies() {
-        Money yen = new Money(BigDecimal.ONE, Currency.getInstance("JPY"));
+        Money yen = new Money(BigDecimal.ONE, JPY);
 
         assertThatThrownBy(() -> gbp("1").compareTo(yen)).isInstanceOf(CurrencyMismatchException.class);
-    }
-
-    @Test
-    void rejectsPseudoCurrency() {
-        Currency xxx = Currency.getInstance("XXX");
-
-        assertThatThrownBy(() -> new Money(BigDecimal.ONE, xxx))
-                .isInstanceOf(IllegalArgumentException.class);
     }
 }
