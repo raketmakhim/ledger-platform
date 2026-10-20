@@ -15,7 +15,7 @@ com.raketmakhim.ledger
   accounting
     domain        business rules, plain Java (no Spring, no JPA)
     application   use cases, plus interfaces ("ports") for what they need from outside
-  (adapters)      not built yet: database, REST API
+    adapter       implementations of the ports; so far only UuidV7IdGenerator (database and REST API not built yet)
 ```
 
 An ArchUnit test fails the build if anything in `domain` imports Spring or JPA.
@@ -73,7 +73,7 @@ The services depend on interfaces, not implementations:
 
 - `AccountRepository`: find an account, `getById` (find it or throw `AccountNotFoundException`), find the clearing account for a currency, save.
 - `JournalEntryRepository`: save an entry.
-- `IdGenerator`: make a new id (the real one will produce UUIDv7).
+- `IdGenerator`: make a new id. `adapter/UuidV7IdGenerator` is the real one (UUIDv7, from `java-uuid-generator`).
 - `java.time.Clock`: the current time, so tests can fix it.
 
 ## Database (`db/migration/V1__init.sql`)
@@ -104,4 +104,4 @@ GitHub Actions runs two jobs on every push: `unit-tests` (also prints the covera
 
 ## Not built yet
 
-The real `IdGenerator`, the database adapter (JPA entities, mappers, repository implementations, the transaction), reversals, withdrawals, the REST API, idempotency, locking, security and events. See the [roadmap](roadmap.md).
+The database adapter (JPA entities, mappers, repository implementations, the transaction), reversals, withdrawals, the REST API, idempotency, locking, security and events. See the [roadmap](roadmap.md).

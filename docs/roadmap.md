@@ -2,7 +2,7 @@
 
 ## 1. Ledger
 
-**Status:** Done, apart from two later pieces. Domain objects (`Money`, `Posting`, `JournalEntry`, `Account`) and the deposit flow (`DepositService` with its ports) are built and unit-tested. Left: the real `IdGenerator` (UUIDv7), the database adapter that saves a deposit in one transaction, and the optional database trigger.
+**Status:** Done, apart from two later pieces. Domain objects (`Money`, `Posting`, `JournalEntry`, `Account`) and the deposit flow (`DepositService` with its ports) are built and unit-tested. Left: the database adapter that saves a deposit in one transaction, and the optional database trigger.
 
 **Tables** (in `V1__init.sql`)
 - `account` (id, currency, type, status, balance, version, created_at). `type` is CUSTOMER or SYSTEM, and only SYSTEM accounts may go negative.
@@ -11,7 +11,7 @@
 
 **Account domain object** (done): `Account` holds a `Money` balance, and `applyPosting(posting)` returns a new `Account` with the balance changed. It rejects postings for another account or currency, on a non-ACTIVE account, or that would overdraw a customer account ("Insufficient funds"). It never changes the original, and `version` is left for the persistence layer to increment. `DepositService` and `TransferService` connect a `JournalEntry` to its accounts.
 
-**IDs:** UUIDv7, generated in the app (see `decisions/data-model.md`). Not built yet.
+**IDs:** UUIDv7, generated in the app (see `decisions/data-model.md`). Done: `UuidV7IdGenerator` in `accounting/adapter`.
 
 **Balance rule:** Enforced in the domain: `JournalEntry` refuses to build unless it has at least 2 postings that sum to zero per currency. Done. Optionally back it up with a deferred constraint trigger in the database (not done).
 
