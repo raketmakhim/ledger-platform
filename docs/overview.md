@@ -15,7 +15,7 @@ com.raketmakhim.ledger
   accounting
     domain        business rules, plain Java (no Spring, no JPA)
     application   use cases, plus interfaces ("ports") for what they need from outside
-    adapter       implementations of the ports; so far only UuidV7IdGenerator (database and REST API not built yet)
+    adapter       implementations of the ports: UuidV7IdGenerator, and persistence/ (the database code). The REST API is not built yet
 ```
 
 An ArchUnit test fails the build if anything in `domain` imports Spring or JPA.
@@ -102,6 +102,19 @@ GitHub Actions runs two jobs on every push: `unit-tests` (also prints the covera
 - Tests: see the [README](../README.md).
 - The app: `.\mvnw spring-boot:test-run` starts it with a throwaway Postgres. Alternatively, `docker compose up` starts a Postgres with a saved volume on port 5432, and `application.yaml` points at it. If you change `V1__init.sql` after it has run against that volume, Flyway will fail on a checksum mismatch, so remove the volume first (`docker compose down -v`).
 
+## Database adapter (`accounting/adapter/persistence`)
+
+The JPA code that implements the repository ports. Nothing outside this package sees a JPA class.
+
+- `AccountEntity`, `JournalEntryEntity`, `PostingEntity`: one per table, package-private. `AccountEntity.version` is a JPA `@Version`.
+- `AccountMapper`, `JournalEntryMapper`: hand-written conversion between entities and domain objects. Entries are only written so far, so `JournalEntryMapper` has no way back.
+- `JpaAccountRepository`: find by id, find the clearing account for a currency, save. Saving an existing account checks its version, so a stale copy fails with an optimistic-locking exception and never overwrites a newer balance.
+- `JpaJournalEntryRepository`: saves an entry and its postings.
+
+Each `save` has its own `@Transactional`, so it joins an outer transaction if there is one. The service-level transaction that makes a whole deposit or transfer atomic is not built yet (see [todo](todo.md)).
+
+The mappers are unit-tested. The repositories need a real database, so `JpaRepositoriesTest` is an integration test, and the two `Jpa*` classes are excluded from the unit coverage rule in `pom.xml`.
+
 ## Not built yet
 
-The database adapter (JPA entities, mappers, repository implementations, the transaction), reversals, withdrawals, the REST API, idempotency, locking, security and events. See the [roadmap](roadmap.md).
+The transaction around a deposit or transfer, row locking, reversals, withdrawals, the REST API, idempotency, locking, security and events. See the [roadmap](roadmap.md).

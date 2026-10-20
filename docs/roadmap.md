@@ -2,7 +2,7 @@
 
 ## 1. Ledger
 
-**Status:** Done, apart from two later pieces. Domain objects (`Money`, `Posting`, `JournalEntry`, `Account`) and the deposit flow (`DepositService` with its ports) are built and unit-tested. Left: the database adapter that saves a deposit in one transaction, and the optional database trigger.
+**Status:** Done, apart from two later pieces. Domain objects (`Money`, `Posting`, `JournalEntry`, `Account`) and the deposit flow (`DepositService` with its ports) are built and unit-tested. Built since: the repositories and entities (`accounting/adapter/persistence`). Left: one transaction around a deposit or transfer, and the optional database trigger.
 
 **Tables** (in `V1__init.sql`)
 - `account` (id, currency, type, status, balance, version, created_at). `type` is CUSTOMER or SYSTEM, and only SYSTEM accounts may go negative.

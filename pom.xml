@@ -90,6 +90,12 @@
 				<groupId>org.jacoco</groupId>
 				<artifactId>jacoco-maven-plugin</artifactId>
 				<version>0.8.15</version>
+				<configuration>
+					<excludes>
+						<!-- need a real database, so only the integration tests cover them -->
+						<exclude>**/adapter/persistence/Jpa*</exclude>
+					</excludes>
+				</configuration>
 				<executions>
 					<execution>
 						<goals>
