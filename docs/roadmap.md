@@ -9,7 +9,7 @@
 - `journal_entry` (id, type, reference, created_at). `type` is an enum: DEPOSIT, TRANSFER, REVERSAL.
 - `posting` (id, entry_id, account_id, signed amount, currency)
 
-**Account domain object** (done): `Account` holds a `Money` balance, and `applyPosting(posting)` returns a new `Account` with the balance changed. It rejects postings for another account or currency, on a non-ACTIVE account, or that would overdraw a customer account ("Insufficient funds"). It never changes the original, and `version` is left for the persistence layer to increment. Nothing yet connects a `JournalEntry` to its accounts: that coordination belongs to the transfer service (item 2).
+**Account domain object** (done): `Account` holds a `Money` balance, and `applyPosting(posting)` returns a new `Account` with the balance changed. It rejects postings for another account or currency, on a non-ACTIVE account, or that would overdraw a customer account ("Insufficient funds"). It never changes the original, and `version` is left for the persistence layer to increment. `DepositService` and `TransferService` connect a `JournalEntry` to its accounts.
 
 **IDs:** UUIDv7, generated in the app (see `decisions/data-model.md`). Not built yet.
 
@@ -26,7 +26,7 @@
 
 ## 2. Transfers API
 
-**Status:** Not started. The domain exceptions it will map to problem types already exist (`InsufficientFundsException`, `AccountNotActiveException`, `CurrencyMismatchException`, `UnbalancedEntryException`); the handler, the request validation and the transfer service are not built.
+**Status:** The transfer service is built and unit-tested (`TransferService`, `accounting/application`). The domain exceptions it will map to problem types already exist (`InsufficientFundsException`, `AccountNotActiveException`, `CurrencyMismatchException`, `UnbalancedEntryException`); the REST endpoint, the request validation, the exception handler and the database adapter are not built.
 
 **Validation**
 - Amount is positive.

@@ -2,6 +2,7 @@ package com.raketmakhim.ledger.accounting.domain.journal;
 
 import java.util.UUID;
 
+import com.raketmakhim.ledger.accounting.domain.Require;
 import com.raketmakhim.ledger.accounting.domain.money.Money;
 
 /**
@@ -12,14 +13,10 @@ import com.raketmakhim.ledger.accounting.domain.money.Money;
 public record Posting(UUID id, UUID accountId, Money amount) {
 
     public Posting {
-        nullChecks(id, accountId, amount);
+        Require.notNull(id, "Id");
+        Require.notNull(accountId, "AccountId");
+        Require.notNull(amount, "Amount");
         nonZeroCheck(amount);
-    }
-
-    private static void nullChecks(UUID id, UUID accountId, Money amount){
-        if (id == null || accountId == null || amount == null){
-            throw new IllegalArgumentException("Id/AccountId/Amount cannot be null.");
-        }
     }
 
     private static void nonZeroCheck(Money amount){

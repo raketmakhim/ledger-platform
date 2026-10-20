@@ -4,7 +4,7 @@ A map of the code as it stands today: what each part does, how the parts fit tog
 
 ## What exists
 
-A ledger core: money, accounts, journal entries and the rules that keep them consistent, plus the first use case (a deposit). All of it is plain Java with unit tests, and the first database migration. There is no API and no database code yet, so nothing is saved anywhere.
+A ledger core: money, accounts, journal entries and the rules that keep them consistent, plus two use cases (deposit and transfer). All of it is plain Java with unit tests, and the first database migration. There is no API and no database code yet, so nothing is saved anywhere.
 
 ## Layout
 
@@ -65,9 +65,13 @@ Rules the API must tell apart have their own exception, all under `DomainExcepti
 
 Nothing is saved unless every rule passes. Putting the saves in one database transaction will be the database adapter's job.
 
-The service depends on interfaces, not implementations:
+`TransferService.transfer(fromId, toId, amount, reference)` moves money between two customer accounts. It follows the same steps, with no clearing account: reject a bad amount, null ids or the same account on both sides, load both accounts (`AccountNotFoundException` if missing), reject non-customer accounts, build a negative posting for the source and a positive one for the destination, build a `TRANSFER` entry, call `applyPosting` on both (which catches a frozen account, a currency mismatch and insufficient funds), then save. Locking the two accounts, in ascending id order, is the database adapter's job.
 
-- `AccountRepository`: find an account, find the clearing account for a currency, save.
+Two small helpers keep the services short. `Checks` (application, package-private) holds the rules both services share: the amount must be positive and the account must be a customer account. `Require.notNull` (domain) is the null check used by every domain object. It throws `IllegalArgumentException`, so the API has one exception type to map to a 400.
+
+The services depend on interfaces, not implementations:
+
+- `AccountRepository`: find an account, `getById` (find it or throw `AccountNotFoundException`), find the clearing account for a currency, save.
 - `JournalEntryRepository`: save an entry.
 - `IdGenerator`: make a new id (the real one will produce UUIDv7).
 - `java.time.Clock`: the current time, so tests can fix it.
@@ -84,7 +88,7 @@ Some rules exist in both the code and the database (no negative customer balance
 
 ## Tests
 
-- **Unit tests** (no Docker): one test class per domain class, plus `DepositServiceTest`, which uses small in-memory fakes of the repositories instead of a database.
+- **Unit tests** (no Docker): one test class per domain class, plus `DepositServiceTest` and `TransferServiceTest`, which use small in-memory fakes of the repositories instead of a database.
 - **Integration test** (`@Tag("integration")`, needs Docker): starts a real Postgres with Testcontainers, runs the migration, and checks the seed accounts and the unique index.
 - **Architecture test:** the `domain` package must not depend on Spring or JPA.
 - **Coverage:** JaCoCo writes a report to `target/site/jacoco/index.html`. The app's `main` class is excluded with `@ExcludeFromJacocoGeneratedReport`.
@@ -100,4 +104,4 @@ GitHub Actions runs two jobs on every push: `unit-tests` (also prints the covera
 
 ## Not built yet
 
-The real `IdGenerator`, the database adapter (JPA entities, mappers, repository implementations, the transaction), transfers and reversals, the REST API, idempotency, locking, security and events. See the [roadmap](roadmap.md).
+The real `IdGenerator`, the database adapter (JPA entities, mappers, repository implementations, the transaction), reversals, withdrawals, the REST API, idempotency, locking, security and events. See the [roadmap](roadmap.md).

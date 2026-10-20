@@ -1,0 +1,58 @@
+package com.raketmakhim.ledger.accounting.application;
+
+import java.time.Clock;
+import java.util.List;
+import java.util.UUID;
+
+import com.raketmakhim.ledger.accounting.domain.Require;
+import com.raketmakhim.ledger.accounting.domain.account.Account;
+import com.raketmakhim.ledger.accounting.domain.journal.EntryType;
+import com.raketmakhim.ledger.accounting.domain.journal.JournalEntry;
+import com.raketmakhim.ledger.accounting.domain.journal.Posting;
+import com.raketmakhim.ledger.accounting.domain.money.Money;
+
+/**
+ * Moves money from one customer account to another.
+ * Both accounts are updated and everything is saved only after every rule has passed.
+ * Putting the saves in one database transaction, and locking the accounts, is the database adapter's job.
+ */
+public class TransferService {
+
+    private final AccountRepository accounts;
+    private final JournalEntryRepository entries;
+    private final IdGenerator ids;
+    private final Clock clock;
+
+    public TransferService(AccountRepository accounts, JournalEntryRepository entries, IdGenerator ids, Clock clock){
+        this.accounts = accounts;
+        this.entries = entries;
+        this.ids = ids;
+        this.clock = clock;
+    }
+
+    public JournalEntry transfer(UUID fromId, UUID toId, Money amount, String reference){
+        Checks.positiveAmount(amount, "Transfer");
+        Require.notNull(fromId, "FromId");
+        Require.notNull(toId, "ToId");
+        if (fromId.equals(toId)){
+            throw new IllegalArgumentException("Cannot transfer to the same account.");
+        }
+        Account from = accounts.getById(fromId);
+        Account to = accounts.getById(toId);
+        Checks.customerAccount(from, "Transfer");
+        Checks.customerAccount(to, "Transfer");
+
+        Posting fromPosting = new Posting(ids.newId(), from.id(), amount.negate());
+        Posting toPosting = new Posting(ids.newId(), to.id(), amount);
+        JournalEntry entry = new JournalEntry(ids.newId(), EntryType.TRANSFER, reference, clock.instant(),
+                List.of(fromPosting, toPosting));
+
+        Account updatedFrom = from.applyPosting(fromPosting);
+        Account updatedTo = to.applyPosting(toPosting);
+
+        accounts.save(updatedFrom);
+        accounts.save(updatedTo);
+        entries.save(entry);
+        return entry;
+    }
+}

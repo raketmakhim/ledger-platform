@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.Currency;
 import java.util.UUID;
 
+import com.raketmakhim.ledger.accounting.domain.Require;
 import com.raketmakhim.ledger.accounting.domain.journal.Posting;
 import com.raketmakhim.ledger.accounting.domain.money.CurrencyMismatchException;
 import com.raketmakhim.ledger.accounting.domain.money.Money;
@@ -12,7 +13,12 @@ public record Account(UUID id, Currency currency, AccountType type, AccountStatu
                       Money balance, long version, Instant createdAt) {
 
     public Account {
-        nullChecks(id, currency, type, status, balance, createdAt);
+        Require.notNull(id, "Id");
+        Require.notNull(currency, "Currency");
+        Require.notNull(type, "Type");
+        Require.notNull(status, "Status");
+        Require.notNull(balance, "Balance");
+        Require.notNull(createdAt, "CreatedAt");
         currencyCheck(currency, balance);
         overdraftCheck(type, balance);
     }
@@ -39,13 +45,6 @@ public record Account(UUID id, Currency currency, AccountType type, AccountStatu
             throw new InsufficientFundsException(balance, posting.amount());
         }
         return new Account(id, currency, type, status, newBalance, version, createdAt);
-    }
-
-    private static void nullChecks(UUID id, Currency currency, AccountType type, AccountStatus status,
-                                   Money balance, Instant createdAt){
-        if (id == null || currency == null || type == null || status == null || balance == null || createdAt == null){
-            throw new IllegalArgumentException("Id/Currency/Type/Status/Balance/CreatedAt cannot be null.");
-        }
     }
 
     private static void currencyCheck(Currency currency, Money money){

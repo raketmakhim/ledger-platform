@@ -8,21 +8,21 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import com.raketmakhim.ledger.accounting.domain.Require;
+
 public record JournalEntry(UUID id, EntryType type, String reference, Instant createdAt, List<Posting> postings) {
 
     public JournalEntry {
-        nullChecks(id, type, reference, createdAt, postings);
+        Require.notNull(id, "Id");
+        Require.notNull(type, "Type");
+        Require.notNull(reference, "Reference");
+        Require.notNull(createdAt, "CreatedAt");
+        Require.notNull(postings, "Postings");
         blankCheck(reference);
         referenceLengthCheck(reference);
         postings = List.copyOf(postings);
         minimumPostingsCheck(postings);
         balanceCheck(postings);
-    }
-
-    private static void nullChecks(UUID id, EntryType type, String reference, Instant createdAt, List<Posting> postings){
-        if (id == null || type == null || reference == null || createdAt == null || postings == null){
-            throw new IllegalArgumentException("Id/Type/Reference/CreatedAt/Postings cannot be null.");
-        }
     }
 
     private static void blankCheck(String reference){

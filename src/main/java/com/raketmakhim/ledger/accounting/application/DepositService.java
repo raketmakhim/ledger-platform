@@ -5,8 +5,6 @@ import java.util.List;
 import java.util.UUID;
 
 import com.raketmakhim.ledger.accounting.domain.account.Account;
-import com.raketmakhim.ledger.accounting.domain.account.AccountNotFoundException;
-import com.raketmakhim.ledger.accounting.domain.account.AccountType;
 import com.raketmakhim.ledger.accounting.domain.journal.EntryType;
 import com.raketmakhim.ledger.accounting.domain.journal.JournalEntry;
 import com.raketmakhim.ledger.accounting.domain.journal.Posting;
@@ -33,9 +31,9 @@ public class DepositService {
     }
 
     public JournalEntry deposit(UUID accountId, Money amount, String reference){
-        positiveAmountCheck(amount);
-        Account customer = accounts.findById(accountId).orElseThrow(() -> new AccountNotFoundException(accountId));
-        customerAccountCheck(customer);
+        Checks.positiveAmount(amount, "Deposit");
+        Account customer = accounts.getById(accountId);
+        Checks.customerAccount(customer, "Deposit");
         Account clearing = accounts.findClearingAccount(amount.currency()).orElseThrow(
                 () -> new UnsupportedCurrencyException(amount.currency()));
 
@@ -51,20 +49,5 @@ public class DepositService {
         accounts.save(updatedCustomer);
         entries.save(entry);
         return entry;
-    }
-
-    private static void positiveAmountCheck(Money amount){
-        if (amount == null){
-            throw new IllegalArgumentException("Amount cannot be null.");
-        }
-        if (!amount.isPositive()){
-            throw new IllegalArgumentException("Deposit amount must be positive: " + amount.amount());
-        }
-    }
-
-    private static void customerAccountCheck(Account account){
-        if (account.type() != AccountType.CUSTOMER){
-            throw new IllegalArgumentException("Deposits go to customer accounts, not " + account.type() + ".");
-        }
     }
 }

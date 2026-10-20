@@ -3,10 +3,13 @@ package com.raketmakhim.ledger.accounting.domain.money;
 import java.math.BigDecimal;
 import java.util.Currency;
 
+import com.raketmakhim.ledger.accounting.domain.Require;
+
 public record Money(BigDecimal amount, Currency currency) implements Comparable<Money> {
 
     public Money {
-        nullChecks(amount, currency);
+        Require.notNull(amount, "Amount");
+        Require.notNull(currency, "Currency");
         validCurrencyCheck(currency);
         maxAmountCheck(amount);
         decimalPlacesCheck(amount, currency);
@@ -64,12 +67,6 @@ public record Money(BigDecimal amount, Currency currency) implements Comparable<
     private static void decimalPlacesCheck(BigDecimal amount, Currency currency){
         if (amount.stripTrailingZeros().scale() > currency.getDefaultFractionDigits()){
             throw new IllegalArgumentException("Too many decimal places for " + currency.getCurrencyCode() + ": " + amount);
-        }
-    }
-
-    private static void nullChecks(BigDecimal amount, Currency currency){
-        if (amount == null || currency == null){
-            throw new IllegalArgumentException("Amount/Currency cannot be null.");
         }
     }
 
