@@ -13,29 +13,22 @@ A payments and ledger platform for recording and tracking financial transactions
 ## Prerequisites
 
 - JDK 21
-- Docker (required for tests and for running locally via Testcontainers)
+- Python 3 (for the `task` commands)
+- Docker (required for integration tests and for running locally via Testcontainers)
 
 ## Getting Started
 
-Run the unit tests (no Docker needed). This also writes a coverage report to `target/site/jacoco/index.html`:
+Run the unit tests (no Docker needed). This also checks the coverage rule, lists any uncovered lines, and writes a report to `target/site/jacoco/index.html`:
 
 ```bash
-./mvnw test -DexcludedGroups=integration
+./task test
 ```
 
 Run the integration tests (needs Docker):
 
 ```bash
-./mvnw test -Dgroups=integration
+./task integration
 ```
-
-Run everything:
-
-```bash
-./mvnw test
-```
-
-Tests that need Spring or a database must be tagged `@Tag("integration")`, or they run in the unit job.
 
 Run the app locally with a throwaway PostgreSQL container (started automatically by Testcontainers):
 
@@ -43,9 +36,9 @@ Run the app locally with a throwaway PostgreSQL container (started automatically
 ./mvnw spring-boot:test-run
 ```
 
-On Windows PowerShell, use `.\mvnw` instead of `./mvnw`.
+On Windows PowerShell, use `.\task` and `.\mvnw.cmd` instead of `./task` and `./mvnw`. The health endpoint is at http://localhost:8080/actuator/health.
 
-The health endpoint is available at http://localhost:8080/actuator/health.
+Every other command (single tests, coverage, Docker, build) is in [docs/commands.md](docs/commands.md).
 
 ## Project Structure
 
@@ -53,7 +46,7 @@ The health endpoint is available at http://localhost:8080/actuator/health.
 src/main/java/com/raketmakhim/ledger/accounting/domain   Plain-Java domain: Money, Posting, JournalEntry, Account
 src/main/resources                                       Configuration (application.yaml) and Flyway migrations (db/migration)
 src/test/java/com/raketmakhim/ledger                     Tests, ArchUnit rules and Testcontainers setup
-docs/                                                    overview.md, decisions/, roadmap.md, standards.md, todo.md
+docs/                                                    overview.md, commands.md, decisions/, roadmap.md, standards.md, todo.md
 ```
 
 The code follows a hexagonal layout, grouped by feature. The `domain` package must not depend on Spring or JPA, and a test enforces that.

@@ -12,7 +12,13 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
-      - run: ./mvnw -B test -DexcludedGroups=integration
+      - run: ./task test
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: jacoco-report
+          path: target/site/jacoco
       - name: Coverage summary
         run: |
           awk -F, 'NR>1 {m+=$8; c+=$9} END {printf "### Unit test coverage\nLines covered: %d of %d (%.1f%%)\n", c, m+c, 100*c/(m+c)}' target/site/jacoco/jacoco.csv >> "$GITHUB_STEP_SUMMARY"
@@ -26,4 +32,4 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
-      - run: ./mvnw -B test -Dgroups=integration
+      - run: ./task integration
