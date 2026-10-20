@@ -69,146 +69,146 @@ class TransferServiceTest {
         IdGenerator ids = () -> new UUID(2, nextId++);
         service = new TransferService(accountRepository, entryRepository, ids, Clock.fixed(NOW, ZoneOffset.UTC));
 
-        // add(ALICE, GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE, "100");
-        // add(BOB, GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE, "0");
-        // add(CLEARING, GBP, AccountType.SYSTEM, AccountStatus.ACTIVE, "0");
+        add(ALICE, GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE, "100");
+        add(BOB, GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE, "0");
+        add(CLEARING, GBP, AccountType.SYSTEM, AccountStatus.ACTIVE, "0");
     }
 
-    // private void add(UUID id, Currency currency, AccountType type, AccountStatus status, String balance) {
-    //     accounts.put(id, new Account(id, currency, type, status, new Money(new BigDecimal(balance), currency), 0, NOW));
-    // }
+    private void add(UUID id, Currency currency, AccountType type, AccountStatus status, String balance) {
+        accounts.put(id, new Account(id, currency, type, status, new Money(new BigDecimal(balance), currency), 0, NOW));
+    }
 
-    // private static Money gbp(String amount) {
-    //     return new Money(new BigDecimal(amount), GBP);
-    // }
+    private static Money gbp(String amount) {
+        return new Money(new BigDecimal(amount), GBP);
+    }
 
-    // private void assertNothingChangedOrSaved() {
-    //     assertThat(savedEntries).isEmpty();
-    //     assertThat(accounts.get(ALICE).balance()).isEqualTo(gbp("100"));
-    //     assertThat(accounts.get(BOB).balance()).isEqualTo(gbp("0"));
-    // }
+    private void assertNothingChangedOrSaved() {
+        assertThat(savedEntries).isEmpty();
+        assertThat(accounts.get(ALICE).balance()).isEqualTo(gbp("100"));
+        assertThat(accounts.get(BOB).balance()).isEqualTo(gbp("0"));
+    }
 
-    // @Test
-    // void transferMovesMoneyBetweenCustomers() {
-    //     JournalEntry entry = service.transfer(ALICE, BOB, gbp("40"), "T-1");
+    @Test
+    void transferMovesMoneyBetweenCustomers() {
+        JournalEntry entry = service.transfer(ALICE, BOB, gbp("40"), "T-1");
 
-    //     assertThat(accounts.get(ALICE).balance()).isEqualTo(gbp("60"));
-    //     assertThat(accounts.get(BOB).balance()).isEqualTo(gbp("40"));
-    //     assertThat(savedEntries).containsExactly(entry);
-    // }
+        assertThat(accounts.get(ALICE).balance()).isEqualTo(gbp("60"));
+        assertThat(accounts.get(BOB).balance()).isEqualTo(gbp("40"));
+        assertThat(savedEntries).containsExactly(entry);
+    }
 
-    // @Test
-    // void transferRecordsATimedTransferEntryWithTwoPostings() {
-    //     JournalEntry entry = service.transfer(ALICE, BOB, gbp("40"), "T-1");
+    @Test
+    void transferRecordsATimedTransferEntryWithTwoPostings() {
+        JournalEntry entry = service.transfer(ALICE, BOB, gbp("40"), "T-1");
 
-    //     assertThat(entry.type()).isEqualTo(EntryType.TRANSFER);
-    //     assertThat(entry.reference()).isEqualTo("T-1");
-    //     assertThat(entry.createdAt()).isEqualTo(NOW);
-    //     assertThat(entry.postings()).hasSize(2);
-    //     assertThat(entry.postings()).anySatisfy(p -> {
-    //         assertThat(p.accountId()).isEqualTo(ALICE);
-    //         assertThat(p.amount()).isEqualTo(gbp("-40"));
-    //     });
-    //     assertThat(entry.postings()).anySatisfy(p -> {
-    //         assertThat(p.accountId()).isEqualTo(BOB);
-    //         assertThat(p.amount()).isEqualTo(gbp("40"));
-    //     });
-    // }
+        assertThat(entry.type()).isEqualTo(EntryType.TRANSFER);
+        assertThat(entry.reference()).isEqualTo("T-1");
+        assertThat(entry.createdAt()).isEqualTo(NOW);
+        assertThat(entry.postings()).hasSize(2);
+        assertThat(entry.postings()).anySatisfy(p -> {
+            assertThat(p.accountId()).isEqualTo(ALICE);
+            assertThat(p.amount()).isEqualTo(gbp("-40"));
+        });
+        assertThat(entry.postings()).anySatisfy(p -> {
+            assertThat(p.accountId()).isEqualTo(BOB);
+            assertThat(p.amount()).isEqualTo(gbp("40"));
+        });
+    }
 
-    // @Test
-    // void allowsTransferOfTheWholeBalance() {
-    //     service.transfer(ALICE, BOB, gbp("100"), "T-1");
+    @Test
+    void allowsTransferOfTheWholeBalance() {
+        service.transfer(ALICE, BOB, gbp("100"), "T-1");
 
-    //     assertThat(accounts.get(ALICE).balance().isZero()).isTrue();
-    // }
+        assertThat(accounts.get(ALICE).balance().isZero()).isTrue();
+    }
 
-    // static Stream<Money> badAmounts() {
-    //     return Stream.of(gbp("0"), gbp("-5"), null);
-    // }
+    static Stream<Money> badAmounts() {
+        return Stream.of(gbp("0"), gbp("-5"), null);
+    }
 
-    // @ParameterizedTest
-    // @MethodSource("badAmounts")
-    // void rejectsZeroNegativeAndNullAmounts(Money amount) {
-    //     assertThatThrownBy(() -> service.transfer(ALICE, BOB, amount, "r")).isInstanceOf(IllegalArgumentException.class);
-    //     assertNothingChangedOrSaved();
-    // }
+    @ParameterizedTest
+    @MethodSource("badAmounts")
+    void rejectsZeroNegativeAndNullAmounts(Money amount) {
+        assertThatThrownBy(() -> service.transfer(ALICE, BOB, amount, "r")).isInstanceOf(IllegalArgumentException.class);
+        assertNothingChangedOrSaved();
+    }
 
-    // static Stream<Arguments> badAccountPairs() {
-    //     return Stream.of(
-    //             Arguments.of(null, BOB),
-    //             Arguments.of(ALICE, null),
-    //             Arguments.of(ALICE, ALICE),
-    //             Arguments.of(CLEARING, BOB),
-    //             Arguments.of(ALICE, CLEARING));
-    // }
+    static Stream<Arguments> badAccountPairs() {
+        return Stream.of(
+                Arguments.of(null, BOB),
+                Arguments.of(ALICE, null),
+                Arguments.of(ALICE, ALICE),
+                Arguments.of(CLEARING, BOB),
+                Arguments.of(ALICE, CLEARING));
+    }
 
-    // @ParameterizedTest
-    // @MethodSource("badAccountPairs")
-    // void rejectsNullSameAndSystemAccounts(UUID from, UUID to) {
-    //     assertThatThrownBy(() -> service.transfer(from, to, gbp("10"), "r")).isInstanceOf(IllegalArgumentException.class);
-    //     assertNothingChangedOrSaved();
-    // }
+    @ParameterizedTest
+    @MethodSource("badAccountPairs")
+    void rejectsNullSameAndSystemAccounts(UUID from, UUID to) {
+        assertThatThrownBy(() -> service.transfer(from, to, gbp("10"), "r")).isInstanceOf(IllegalArgumentException.class);
+        assertNothingChangedOrSaved();
+    }
 
-    // @ParameterizedTest
-    // @MethodSource("customerIds")
-    // void rejectsFrozenSourceOrDestinationAndSavesNothing(UUID frozen) {
-    //     add(frozen, GBP, AccountType.CUSTOMER, AccountStatus.FROZEN, accounts.get(frozen).balance().amount().toPlainString());
+    @ParameterizedTest
+    @MethodSource("customerIds")
+    void rejectsFrozenSourceOrDestinationAndSavesNothing(UUID frozen) {
+        add(frozen, GBP, AccountType.CUSTOMER, AccountStatus.FROZEN, accounts.get(frozen).balance().amount().toPlainString());
 
-    //     assertThatThrownBy(() -> service.transfer(ALICE, BOB, gbp("10"), "r")).isInstanceOf(AccountNotActiveException.class);
-    //     assertNothingChangedOrSaved();
-    // }
+        assertThatThrownBy(() -> service.transfer(ALICE, BOB, gbp("10"), "r")).isInstanceOf(AccountNotActiveException.class);
+        assertNothingChangedOrSaved();
+    }
 
-    // static Stream<UUID> customerIds() {
-    //     return Stream.of(ALICE, BOB);
-    // }
+    static Stream<UUID> customerIds() {
+        return Stream.of(ALICE, BOB);
+    }
 
-    // @ParameterizedTest
-    // @NullAndEmptySource
-    // @ValueSource(strings = {" ", "   "})
-    // void rejectsNullAndBlankReferenceAndSavesNothing(String reference) {
-    //     assertThatThrownBy(() -> service.transfer(ALICE, BOB, gbp("10"), reference)).isInstanceOf(IllegalArgumentException.class);
-    //     assertNothingChangedOrSaved();
-    // }
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {" ", "   "})
+    void rejectsNullAndBlankReferenceAndSavesNothing(String reference) {
+        assertThatThrownBy(() -> service.transfer(ALICE, BOB, gbp("10"), reference)).isInstanceOf(IllegalArgumentException.class);
+        assertNothingChangedOrSaved();
+    }
 
-    // @Test
-    // void rejectsMissingSourceAndDestination() {
-    //     UUID missing = new UUID(9, 9);
+    @Test
+    void rejectsMissingSourceAndDestination() {
+        UUID missing = new UUID(9, 9);
 
-    //     assertThatThrownBy(() -> service.transfer(missing, BOB, gbp("10"), "r"))
-    //             .isInstanceOfSatisfying(AccountNotFoundException.class,
-    //                     e -> assertThat(e.accountId()).isEqualTo(missing));
-    //     assertThatThrownBy(() -> service.transfer(ALICE, missing, gbp("10"), "r"))
-    //             .isInstanceOf(AccountNotFoundException.class);
-    //     assertNothingChangedOrSaved();
-    // }
+        assertThatThrownBy(() -> service.transfer(missing, BOB, gbp("10"), "r"))
+                .isInstanceOfSatisfying(AccountNotFoundException.class,
+                        e -> assertThat(e.accountId()).isEqualTo(missing));
+        assertThatThrownBy(() -> service.transfer(ALICE, missing, gbp("10"), "r"))
+                .isInstanceOf(AccountNotFoundException.class);
+        assertNothingChangedOrSaved();
+    }
 
-    // @Test
-    // void rejectsInsufficientFundsAndSavesNothing() {
-    //     assertThatThrownBy(() -> service.transfer(ALICE, BOB, gbp("100.01"), "r"))
-    //             .isInstanceOf(InsufficientFundsException.class);
-    //     assertNothingChangedOrSaved();
-    // }
+    @Test
+    void rejectsInsufficientFundsAndSavesNothing() {
+        assertThatThrownBy(() -> service.transfer(ALICE, BOB, gbp("100.01"), "r"))
+                .isInstanceOf(InsufficientFundsException.class);
+        assertNothingChangedOrSaved();
+    }
 
-    // @Test
-    // void transferCreatesNoMoneyAndDestroysNone() {
-    //     Money before = accounts.get(ALICE).balance().plus(accounts.get(BOB).balance());
+    @Test
+    void transferCreatesNoMoneyAndDestroysNone() {
+        Money before = accounts.get(ALICE).balance().plus(accounts.get(BOB).balance());
 
-    //     service.transfer(ALICE, BOB, gbp("33.33"), "T-1");
+        service.transfer(ALICE, BOB, gbp("33.33"), "T-1");
 
-    //     assertThat(accounts.get(ALICE).balance().plus(accounts.get(BOB).balance())).isEqualTo(before);
-    // }
+        assertThat(accounts.get(ALICE).balance().plus(accounts.get(BOB).balance())).isEqualTo(before);
+    }
 
-    // @Test
-    // void rejectsCurrencyThatDoesNotMatchTheAccountsAndSavesNothing() {
-    //     assertThatThrownBy(() -> service.transfer(ALICE, BOB, new Money(BigDecimal.TEN, USD), "r"))
-    //             .isInstanceOf(CurrencyMismatchException.class);
-    //     assertNothingChangedOrSaved();
-    // }
+    @Test
+    void rejectsCurrencyThatDoesNotMatchTheAccountsAndSavesNothing() {
+        assertThatThrownBy(() -> service.transfer(ALICE, BOB, new Money(BigDecimal.TEN, USD), "r"))
+                .isInstanceOf(CurrencyMismatchException.class);
+        assertNothingChangedOrSaved();
+    }
 
-    // @Test
-    // void rejectsReferenceThatIsTooLongAndSavesNothing() {
-    //     assertThatThrownBy(() -> service.transfer(ALICE, BOB, gbp("10"), "a".repeat(37)))
-    //             .isInstanceOf(IllegalArgumentException.class);
-    //     assertNothingChangedOrSaved();
-    // }
+    @Test
+    void rejectsReferenceThatIsTooLongAndSavesNothing() {
+        assertThatThrownBy(() -> service.transfer(ALICE, BOB, gbp("10"), "a".repeat(37)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertNothingChangedOrSaved();
+    }
 }

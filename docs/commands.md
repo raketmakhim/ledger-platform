@@ -13,6 +13,9 @@ On Windows PowerShell, use `.\task` and `.\mvnw.cmd` instead of `./task` and `./
 | `./task test` | Clean build, unit tests, then lists the files and lines that are not covered |
 | `./task integration` | Integration tests (needs Docker) |
 | `./task coverage` | Lists the uncovered files and lines from the last test run, without running anything |
+| `./task up` | Starts Docker Desktop if it isn't running, starts Postgres and waits until it is healthy, then runs the app. Ctrl+C stops the app but leaves Postgres running |
+| `./task down` | Stops Postgres. Your data is kept |
+| `./task down --reset` | Stops Postgres and deletes its data (needed if you change `V1__init.sql` after it has run) |
 
 The sections below are the plain Maven commands behind them.
 

@@ -3,11 +3,14 @@
     test         unit tests, then the coverage gaps
     integration  integration tests (needs Docker)
     coverage     coverage of every file from the last test run, and the lines missing
+    up           start Docker Desktop if needed, start Postgres, then run the app
+    down         stop Postgres (down --reset also deletes its data)
 """
 import argparse
 import os
 import subprocess
 import sys
+import time
 import xml.etree.ElementTree as ET
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -129,9 +132,57 @@ def integration():
     return mvn("test", "-Dgroups=integration", "-Djacoco.skip=true")
 
 
-TASKS = {"test": test, "integration": integration, "coverage": coverage}
+def docker(*args, quiet=False):
+    out = subprocess.DEVNULL if quiet else None
+    return subprocess.run(["docker", *args], cwd=ROOT, stdout=out, stderr=out).returncode
+
+
+def start_docker_desktop():
+    """Opens Docker Desktop and waits for the engine. Linux and CI already run the daemon, so there is nothing to open."""
+    if docker("info", quiet=True) == 0:
+        return True
+    if os.name == "nt":
+        exe = os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"), "Docker", "Docker", "Docker Desktop.exe")
+        if not os.path.exists(exe):
+            print(f"Docker is not running and Docker Desktop was not found at {exe}.")
+            return False
+        subprocess.Popen([exe])
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", "-a", "Docker"])
+    else:
+        print("Docker is not running. Start the Docker daemon and try again.")
+        return False
+    print("Starting Docker Desktop...", flush=True)
+    for _ in range(60):
+        time.sleep(3)
+        if docker("info", quiet=True) == 0:
+            return True
+    print("Docker did not start within 3 minutes.")
+    return False
+
+
+def up():
+    if not start_docker_desktop():
+        return 1
+    code = docker("compose", "up", "-d", "--wait")  # waits for the Postgres healthcheck
+    if code != 0:
+        return code
+    print("Postgres is ready on localhost:5432. Starting the app (Ctrl+C stops the app, not Postgres)...")
+    return mvn("spring-boot:run")
+
+
+def down(reset=False):
+    if docker("info", quiet=True) != 0:
+        print("Docker is not running, so there is nothing to stop.")
+        return 0
+    return docker("compose", "down", *(["-v"] if reset else []))
+
+
+TASKS = {"test": test, "integration": integration, "coverage": coverage, "up": up}
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Project tasks.")
-    parser.add_argument("task", choices=TASKS, help="what to run")
-    sys.exit(TASKS[parser.parse_args().task]())
+    parser.add_argument("task", choices=[*TASKS, "down"], help="what to run")
+    parser.add_argument("--reset", action="store_true", help="with down: also delete the database data")
+    args = parser.parse_args()
+    sys.exit(down(args.reset) if args.task == "down" else TASKS[args.task]())
