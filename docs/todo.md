@@ -16,6 +16,15 @@ Found in review. None of these is a bug yet, because nothing is saved anywhere, 
 - [ ] **Transfers need the same three:** the transaction, the duplicate-reference constraint, and locking. Lock both accounts in ascending id order, not source then destination (`TransferService` loads source first), or two opposite transfers (A to B and B to A) can deadlock. Prove it with the A to B and B to A test from roadmap item 4.
 - [ ] **Small test gap:** the unsupported-currency test checks that no entry was saved, but not that the customer account is unchanged.
 
+## Supply chain
+
+- [x] **Install the Renovate GitHub App on the repository:** done. It opened pull request #1 "Configure Renovate", which adds a basic config. Do not merge it.
+- [ ] **Get our `renovate.json` onto `main`:** until then Renovate runs with its basic config, not ours (3-day wait, grouped updates, no Boot 4 or Postgres 18). Once it is on `main`, Renovate closes pull request #1 by itself and opens the Dependency Dashboard issue. Its first update pull request will pin the GitHub Actions to commit hashes.
+- [ ] **Check the first run of `security.yml` on GitHub:** the pinned `trivy-action` was tested with its default Trivy version, and we pass `v0.76.0`, so the first run is the real test.
+- [ ] **Remove the version overrides in `pom.xml`** (Jackson, Tomcat, PostgreSQL driver) once Spring Boot's own versions reach them. Renovate will not do this for us.
+- [ ] **Look at `.trivyignore.yaml` before 2026-12-31:** the two `spring-webmvc` CVEs expire then and the build fails again. The real fix is the Boot 4 migration (roadmap item 10).
+- [ ] **Scan the container image** once the app is built into one.
+
 ## Later
 
 - [ ] **FX clearing account pattern:** unverified. Research before building FX (roadmap stretch).

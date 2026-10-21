@@ -1,0 +1,24 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigests"],
+  "minimumReleaseAge": "3 days",
+  "packageRules": [
+    {
+      "description": "Stay on Spring Boot 3.5 until the Boot 4 migration (docs/roadmap.md item 10)",
+      "matchPackageNames": ["org.springframework.boot:spring-boot-starter-parent"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    },
+    {
+      "description": "Postgres 17 is a deliberate choice (docs/decisions/data-model.md), so no major upgrades",
+      "matchPackageNames": ["postgres"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    },
+    {
+      "description": "One pull request for the routine minor and patch updates",
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "minor and patch updates"
+    }
+  ]
+}
