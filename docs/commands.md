@@ -72,3 +72,15 @@ GitHub Actions ([.github/workflows/ci.yml](../.github/workflows/ci.yml)) runs on
 - `integration-tests`: `./task integration` (the coverage rule belongs to the unit job).
 
 To reproduce a CI failure locally, run the same command.
+
+A second workflow, [security.yml](../.github/workflows/security.yml), runs on every push, pull request and every Monday:
+
+- `./mvnw generate-resources` writes the SBOM to `target/classes/META-INF/sbom/application.cdx.json`.
+- Trivy `v0.76.0` scans it and fails on any HIGH or CRITICAL finding, ignoring only what is listed in `.trivyignore.yaml`.
+
+To run the scan on your machine, install Trivy `v0.76.0` (check the download against its published checksum), then:
+
+```bash
+./mvnw generate-resources
+trivy sbom target/classes/META-INF/sbom/application.cdx.json --severity HIGH,CRITICAL --ignorefile .trivyignore.yaml --exit-code 1
+```

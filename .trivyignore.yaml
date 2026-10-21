@@ -1,0 +1,16 @@
+# Vulnerabilities we have looked at and accepted for now. Every entry needs a reason and an expiry date,
+# so that it comes back to be looked at again instead of being forgotten. An expired entry stops applying,
+# so the finding fails the build again.
+vulnerabilities:
+  # Spring Framework 6.2 has no patched version for either of these: the fix is only in Spring Framework 7,
+  # which means Spring Boot 4 (roadmap item 10). Checked against the GitHub advisories on 2026-10-21.
+  - id: CVE-2026-47884
+    statement: >-
+      Remote code execution through XsltView. This app has no controllers yet, and will not render XSLT views
+      (it is a JSON API). Fixed by the Spring Boot 4 migration.
+    expired_at: 2026-12-31
+  - id: CVE-2026-47890
+    statement: >-
+      Server-Sent Events stream corruption when rendering view fragments. This app has no views and no SSE.
+      Fixed by the Spring Boot 4 migration.
+    expired_at: 2026-12-31

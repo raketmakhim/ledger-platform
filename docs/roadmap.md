@@ -119,7 +119,7 @@
 
 ## 10. Boot 4 migration
 
-**Status:** Not started.
+**Status:** Not started. It also fixes two CRITICAL `spring-webmvc` CVEs that Trivy reports and that have no patched Spring Framework 6.2 release (accepted until 2026-12-31 in `.trivyignore.yaml`).
 
 Expect these changes:
 - Spring Framework 7
