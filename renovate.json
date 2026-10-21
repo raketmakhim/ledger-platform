@@ -16,6 +16,12 @@
       "enabled": false
     },
     {
+      "description": "Java 21 is a deliberate choice (docs/decisions/tooling.md), so no major upgrades",
+      "matchPackageNames": ["java-jdk"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    },
+    {
       "description": "One pull request for the routine minor and patch updates",
       "matchUpdateTypes": ["minor", "patch"],
       "groupName": "minor and patch updates"

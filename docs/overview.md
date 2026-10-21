@@ -95,7 +95,7 @@ Some rules exist in both the code and the database (no negative customer balance
 
 ## CI
 
-GitHub Actions runs two jobs on every push: `unit-tests` (also prints the coverage summary) and `integration-tests`.
+GitHub Actions runs two jobs on every pull request and every push to `main`: `unit-tests` (also prints the coverage summary) and `integration-tests`.
 
 A separate workflow, `security.yml`, generates the SBOM (a CycloneDX list of the libraries the app ships) and has Trivy scan it. It fails on any HIGH or CRITICAL finding, and also runs every Monday. Findings we have accepted are in `.trivyignore.yaml`, each with a reason and an expiry date. Renovate (`renovate.json`) proposes dependency updates. See [decisions/tooling.md](decisions/tooling.md).
 
