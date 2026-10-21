@@ -1,6 +1,7 @@
 name: Security
 on:
   push:
+    branches: [main]
   pull_request:
   schedule:
     # new vulnerabilities are published every week, even when the code has not changed
