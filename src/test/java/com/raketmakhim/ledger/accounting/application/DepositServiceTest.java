@@ -41,6 +41,7 @@ class DepositServiceTest {
     private final Map<UUID, Account> accounts = new HashMap<>();
     private final List<JournalEntry> savedEntries = new ArrayList<>();
     private long nextId = 100;
+    private final DirectTransactionRunner transactions = new DirectTransactionRunner();
     private DepositService service;
 
     @BeforeEach
@@ -62,7 +63,8 @@ class DepositServiceTest {
         };
         JournalEntryRepository entryRepository = savedEntries::add;
         IdGenerator ids = () -> new UUID(2, nextId++);
-        service = new DepositService(accountRepository, entryRepository, ids, Clock.fixed(NOW, ZoneOffset.UTC));
+        service = new DepositService(accountRepository, entryRepository, ids, Clock.fixed(NOW, ZoneOffset.UTC),
+                transactions);
 
         add(CUSTOMER_ID, GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE);
         add(CLEARING_ID, GBP, AccountType.SYSTEM, AccountStatus.ACTIVE);
@@ -89,6 +91,13 @@ class DepositServiceTest {
         assertThat(accounts.get(CUSTOMER_ID).balance()).isEqualTo(gbp("100"));
         assertThat(accounts.get(CLEARING_ID).balance()).isEqualTo(gbp("-100"));
         assertThat(savedEntries).containsExactly(entry);
+    }
+
+    @Test
+    void depositRunsInsideOneTransaction() {
+        service.deposit(CUSTOMER_ID, gbp("100"), "FPS-1");
+
+        assertThat(transactions.runs()).isEqualTo(1);
     }
 
     @Test
