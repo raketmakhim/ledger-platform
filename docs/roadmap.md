@@ -57,7 +57,7 @@
 
 ## 4. Concurrency
 
-**Status:** Not started.
+**Status:** Built for deposits and transfers, using optimistic locking with retry (see `decisions/architecture.md`) instead of `FOR UPDATE`. `ConcurrencyTest` covers many deposits into one account, overspending, opposite-direction transfers and a deposit that fails halfway. Still open: the hot clearing account serialises deposits, and pessimistic locking is only an option if retries become common.
 
 **Pessimistic locking:** `SELECT ... FOR UPDATE` on both accounts, always locked in ascending id order. The safer default for hot accounts.
 

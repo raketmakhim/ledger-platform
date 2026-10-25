@@ -63,9 +63,9 @@ Rules the API must tell apart have their own exception, all under `DomainExcepti
 6. Call `applyPosting` on both accounts, which catches a frozen account, a currency mismatch and so on.
 7. Only now, save both accounts and the entry.
 
-Nothing is saved unless every rule passes. Putting the saves in one database transaction will be the database adapter's job.
+Nothing is saved unless every rule passes. The whole body runs inside `TransactionRunner.inTransaction`, so the saves commit together.
 
-`TransferService.transfer(fromId, toId, amount, reference)` moves money between two customer accounts. It follows the same steps, with no clearing account: reject a bad amount, null ids or the same account on both sides, load both accounts (`AccountNotFoundException` if missing), reject non-customer accounts, build a negative posting for the source and a positive one for the destination, build a `TRANSFER` entry, call `applyPosting` on both (which catches a frozen account, a currency mismatch and insufficient funds), then save. Locking the two accounts, in ascending id order, is the database adapter's job.
+`TransferService.transfer(fromId, toId, amount, reference)` moves money between two customer accounts. It follows the same steps, with no clearing account: reject a bad amount, null ids or the same account on both sides, load both accounts (`AccountNotFoundException` if missing), reject non-customer accounts, build a negative posting for the source and a positive one for the destination, build a `TRANSFER` entry, call `applyPosting` on both (which catches a frozen account, a currency mismatch and insufficient funds), then save. Concurrent transfers are handled by the version check and retry, not by locking (see Concurrency below).
 
 Two small helpers keep the services short. `Checks` (application, package-private) holds the rules both services share: the amount must be positive and the account must be a customer account. `Require.notNull` (domain) is the null check used by every domain object. It throws `IllegalArgumentException`, so the API has one exception type to map to a 400.
 
@@ -73,6 +73,7 @@ The services depend on interfaces, not implementations:
 
 - `AccountRepository`: find an account, `getById` (find it or throw `AccountNotFoundException`), find the clearing account for a currency, save.
 - `JournalEntryRepository`: save an entry.
+- `TransactionRunner`: run a piece of work as one database transaction, running it again if another request changed an account it read. Throws `ConcurrentUpdateException` after too many attempts.
 - `IdGenerator`: make a new id. `adapter/UuidV7IdGenerator` is the real one (UUIDv7, from `java-uuid-generator`).
 - `java.time.Clock`: the current time, so tests can fix it.
 
@@ -113,10 +114,18 @@ The JPA code that implements the repository ports. Nothing outside this package 
 - `JpaAccountRepository`: find by id, find the clearing account for a currency, save. Saving an existing account checks its version, so a stale copy fails with an optimistic-locking exception and never overwrites a newer balance.
 - `JpaJournalEntryRepository`: saves an entry and its postings.
 
-Each `save` has its own `@Transactional`, so it joins an outer transaction if there is one. The service-level transaction that makes a whole deposit or transfer atomic is not built yet (see [todo](todo.md)).
+Each `save` has its own `@Transactional`, so it joins the service's transaction (and works on its own in tests).
 
 The mappers are unit-tested. The repositories need a real database, so `JpaRepositoriesTest` is an integration test, and the two `Jpa*` classes are excluded from the unit coverage rule in `pom.xml`.
 
+## Concurrency
+
+- **Transaction:** `SpringTransactionRunner` (adapter) implements `TransactionRunner` with `TransactionTemplate`.
+- **Optimistic locking:** accounts are read without locks. `AccountEntity.version` makes a stale save fail, and the runner runs the work again from the start (8 attempts, random growing pause), then throws `ConcurrentUpdateException`.
+- **Deadlocks:** `hibernate.order_updates` (in `application.yaml`) sends updates in primary-key order, and a deadlock loser is retried like any other clash.
+- **Tests:** `SpringTransactionRunnerTest` (unit, with a counting transaction manager) covers the retry rules. `ConcurrencyTest` (integration) fires many requests at once against Postgres and checks the books: many deposits into one account, overspending, opposite-direction transfers, and a deposit that fails halfway. Removing `@Version` makes it fail.
+- **Limit:** one clearing account per currency is a hot row, so heavy deposit load can run out of retries. See [todo](todo.md).
+
 ## Not built yet
 
-The transaction around a deposit or transfer, row locking, reversals, withdrawals, the REST API, idempotency, locking, security and events. See the [roadmap](roadmap.md).
+Row locking (only if retries become common), reversals, withdrawals, the REST API, idempotency, locking, security and events. See the [roadmap](roadmap.md).

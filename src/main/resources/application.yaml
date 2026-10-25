@@ -1,3 +1,8 @@
+ledger:
+  retry:
+    # how often a transfer or deposit is run again after losing a clash with another request, and the pause scale
+    max-attempts: 8
+    backoff-millis: 10
 spring:
   application:
     name: ledger-platform
@@ -9,3 +14,7 @@ spring:
     hibernate:
       ddl-auto: validate
     open-in-view: false
+    properties:
+      hibernate:
+        # update rows in primary-key order, so two requests changing the same accounts cannot deadlock
+        order_updates: true

@@ -43,3 +43,11 @@ Gave up: a few extra constructor parameters. The `IdGenerator` interface is our 
 The domain had grown to 14 files, so it is split by concept into `money`, `account` and `journal`, with `DomainException` at the top. Each enum and exception sits next to the class it belongs to, not in a package of enums or exceptions. The dependencies point one way: `account` uses `journal` and `money`, `journal` uses `money`, and `money` uses nothing. The ArchUnit rule (`..domain..`) covers every sub-package.
 
 Gave up: a few more imports, and classes that cross packages must be public. Revisit if a package grows past about 10 files.
+
+## Concurrency: optimistic locking with retry, behind a TransactionRunner port
+
+Deposits and transfers run inside `TransactionRunner.inTransaction(...)`, a small port in `application`. `SpringTransactionRunner` implements it with Spring's `TransactionTemplate`. Services stay plain Java, and unit tests use a fake that just runs the work. Accounts are read without locks, and `AccountEntity.version` (`@Version`) makes a stale save fail. The runner then runs the whole piece of work again from the start (up to 8 attempts, random and growing pause) and throws `ConcurrentUpdateException` if it still clashes. The retry covers Spring's `ConcurrencyFailureException`: a stale version, a deadlock loser or a lock timeout. `hibernate.order_updates` sends updates in primary-key order, so two requests changing the same accounts in opposite order cannot deadlock.
+
+Why optimistic: Modern Treasury's ledger uses a version check and retry (conditional write on `lock_version`), and customer accounts rarely clash. We found no source for what banks run internally. We chose it over `SELECT ... FOR UPDATE` knowing that pessimistic locking avoids retry loops. `ConcurrencyTest` proves the result either way.
+
+Gave up: under heavy load on one row (the clearing account) requests can use up their retries and fail with `ConcurrentUpdateException`. Revisit with pessimistic locking, or with the asynchronous balance update from the todo, if that happens.
