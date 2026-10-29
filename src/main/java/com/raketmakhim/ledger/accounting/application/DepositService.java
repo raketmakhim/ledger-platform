@@ -14,7 +14,9 @@ import com.raketmakhim.ledger.accounting.domain.money.UnsupportedCurrencyExcepti
 /**
  * Puts money into a customer account, funded through the bank's clearing account for that currency.
  * Both accounts are updated and everything is saved only after every rule has passed.
- * The saves run in one transaction, which is run again if another request changes the same accounts.
+ * It must run in one transaction, which is run again if another request changes the same accounts:
+ * the adapter package wraps it for that (TransactionalDepositService). It reads the accounts itself,
+ * so the whole method is safe to repeat.
  */
 public class DepositService {
 
@@ -22,37 +24,32 @@ public class DepositService {
     private final JournalEntryRepository entries;
     private final IdGenerator ids;
     private final Clock clock;
-    private final TransactionRunner transactions;
 
-    public DepositService(AccountRepository accounts, JournalEntryRepository entries, IdGenerator ids, Clock clock,
-                          TransactionRunner transactions){
+    public DepositService(AccountRepository accounts, JournalEntryRepository entries, IdGenerator ids, Clock clock){
         this.accounts = accounts;
         this.entries = entries;
         this.ids = ids;
         this.clock = clock;
-        this.transactions = transactions;
     }
 
     public JournalEntry deposit(UUID accountId, Money amount, String reference){
         Checks.positiveAmount(amount, "Deposit");
-        return transactions.inTransaction(() -> {
-            Account customer = accounts.getById(accountId);
-            Checks.customerAccount(customer, "Deposit");
-            Account clearing = accounts.findClearingAccount(amount.currency()).orElseThrow(
-                    () -> new UnsupportedCurrencyException(amount.currency()));
+        Account customer = accounts.getById(accountId);
+        Checks.customerAccount(customer, "Deposit");
+        Account clearing = accounts.findClearingAccount(amount.currency()).orElseThrow(
+                () -> new UnsupportedCurrencyException(amount.currency()));
 
-            Posting clearingPosting = new Posting(ids.newId(), clearing.id(), amount.negate());
-            Posting customerPosting = new Posting(ids.newId(), customer.id(), amount);
-            JournalEntry entry = new JournalEntry(ids.newId(), EntryType.DEPOSIT, reference, clock.instant(),
-                    List.of(clearingPosting, customerPosting));
+        Posting clearingPosting = new Posting(ids.newId(), clearing.id(), amount.negate());
+        Posting customerPosting = new Posting(ids.newId(), customer.id(), amount);
+        JournalEntry entry = new JournalEntry(ids.newId(), EntryType.DEPOSIT, reference, clock.instant(),
+                List.of(clearingPosting, customerPosting));
 
-            Account updatedClearing = clearing.applyPosting(clearingPosting);
-            Account updatedCustomer = customer.applyPosting(customerPosting);
+        Account updatedClearing = clearing.applyPosting(clearingPosting);
+        Account updatedCustomer = customer.applyPosting(customerPosting);
 
-            accounts.save(updatedClearing);
-            accounts.save(updatedCustomer);
-            entries.save(entry);
-            return entry;
-        });
+        accounts.save(updatedClearing);
+        accounts.save(updatedCustomer);
+        entries.save(entry);
+        return entry;
     }
 }

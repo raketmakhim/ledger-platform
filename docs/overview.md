@@ -63,7 +63,7 @@ Rules the API must tell apart have their own exception, all under `DomainExcepti
 6. Call `applyPosting` on both accounts, which catches a frozen account, a currency mismatch and so on.
 7. Only now, save both accounts and the entry.
 
-Nothing is saved unless every rule passes. The whole body runs inside `TransactionRunner.inTransaction`, so the saves commit together.
+Nothing is saved unless every rule passes. The services themselves are plain Java. In the running app they are wrapped (see Concurrency below) so the whole method runs in one transaction and the saves commit together.
 
 `TransferService.transfer(fromId, toId, amount, reference)` moves money between two customer accounts. It follows the same steps, with no clearing account: reject a bad amount, null ids or the same account on both sides, load both accounts (`AccountNotFoundException` if missing), reject non-customer accounts, build a negative posting for the source and a positive one for the destination, build a `TRANSFER` entry, call `applyPosting` on both (which catches a frozen account, a currency mismatch and insufficient funds), then save. Concurrent transfers are handled by the version check and retry, not by locking (see Concurrency below).
 
@@ -73,7 +73,6 @@ The services depend on interfaces, not implementations:
 
 - `AccountRepository`: find an account, `getById` (find it or throw `AccountNotFoundException`), find the clearing account for a currency, save.
 - `JournalEntryRepository`: save an entry.
-- `TransactionRunner`: run a piece of work as one database transaction, running it again if another request changed an account it read. Throws `ConcurrentUpdateException` after too many attempts.
 - `IdGenerator`: make a new id. `adapter/UuidV7IdGenerator` is the real one (UUIDv7, from `java-uuid-generator`).
 - `java.time.Clock`: the current time, so tests can fix it.
 
@@ -120,10 +119,11 @@ The mappers are unit-tested. The repositories need a real database, so `JpaRepos
 
 ## Concurrency
 
-- **Transaction:** `SpringTransactionRunner` (adapter) implements `TransactionRunner` with `TransactionTemplate`.
-- **Optimistic locking:** accounts are read without locks. `AccountEntity.version` makes a stale save fail, and the runner runs the work again from the start (8 attempts, random growing pause), then throws `ConcurrentUpdateException`.
+- **Transaction and retry:** `TransactionalTransferService` and `TransactionalDepositService` (adapter) extend the plain services and add `@RetriedTransaction` to the one public method. That annotation (`RetriedTransaction`) is `@Transactional` plus `@Retryable`, and `LedgerConfig` creates the wrappers as the beans. The core stays free of Spring.
+- **Optimistic locking:** accounts are read without locks. `AccountEntity.version` makes a stale save fail, and the whole method runs again in a new transaction (8 attempts, random growing pause, both set by `ledger.retry.*` in `application.yaml`). When the attempts run out the last `ConcurrencyFailureException` is thrown, and the API turns it into a 409.
+- **Order matters:** the retry must be the outer layer, so each attempt gets a fresh transaction. Spring Retry's advice is ordered before the transaction's by default, and `TransactionBoundaryTest` checks it. The wrappers only work when called from another bean: a call from inside the same class skips the proxy.
 - **Deadlocks:** `hibernate.order_updates` (in `application.yaml`) sends updates in primary-key order, and a deadlock loser is retried like any other clash.
-- **Tests:** `SpringTransactionRunnerTest` (unit, with a counting transaction manager) covers the retry rules. `ConcurrencyTest` (integration) fires many requests at once against Postgres and checks the books: many deposits into one account, overspending, opposite-direction transfers, and a deposit that fails halfway. Removing `@Version` makes it fail.
+- **Tests:** `TransactionBoundaryTest` (integration) covers the wrappers: a deposit that fails halfway changes nothing, a clash is retried in a fresh transaction (one rollback, then one commit), and the retries stop at the configured number. `ConcurrencyTest` (integration) fires many requests at once against Postgres and checks the books: many deposits into one account, overspending and opposite-direction transfers. Removing `@Version` makes it fail.
 - **Limit:** one clearing account per currency is a hot row, so heavy deposit load can run out of retries. See [todo](todo.md).
 
 ## Not built yet

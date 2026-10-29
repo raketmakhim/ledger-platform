@@ -8,13 +8,22 @@
 
 Found in review. None of these is a bug yet, because nothing is saved anywhere, but each becomes one once the adapter exists.
 
-- [x] **One transaction around a deposit or transfer:** done. `TransactionRunner` (application port) with `SpringTransactionRunner` (adapter) wraps the whole service body, so the saves commit together or not at all. `ConcurrencyTest.aDepositThatFailsHalfwayChangesNothing` proves it.
+- [x] **One transaction around a deposit or transfer:** done. `TransactionalDepositService` and `TransactionalTransferService` (adapter) add `@Transactional` and `@Retryable` around the plain services, so the saves commit together or not at all. `TransactionBoundaryTest.aDepositThatFailsHalfwayChangesNothing` proves it.
 - [ ] **Duplicate deposit reference:** add `UNIQUE (type, reference)` to `journal_entry` as a backstop, and a `DuplicateReferenceException` (a 409 in the API). Callers must supply a trustworthy unique id (`TxId` or UETR), because `EndToEndId` can be a placeholder. Replaying the original response belongs to idempotency (roadmap item 3).
-- [x] **Lost updates on balances:** done with optimistic locking, not `FOR UPDATE`: the `@Version` check fails a stale save and `SpringTransactionRunner` runs the whole transaction again (8 attempts, random growing pause), then throws `ConcurrentUpdateException`. Updates are sent in primary-key order (`hibernate.order_updates`) so opposite transfers cannot deadlock, and a deadlock loser is retried too. `ConcurrencyTest` proves no money is created or lost, and fails if `@Version` is removed. Pessimistic locking stays an option if retries become common.
+- [x] **Lost updates on balances:** done with optimistic locking, not `FOR UPDATE`: the `@Version` check fails a stale save and `@Retryable` on the wrapper services runs the whole transaction again (8 attempts, random growing pause), then the last `ConcurrencyFailureException` is thrown and the API returns 409. Updates are sent in primary-key order (`hibernate.order_updates`) so opposite transfers cannot deadlock, and a deadlock loser is retried too. `ConcurrencyTest` proves no money is created or lost, and fails if `@Version` is removed. Pessimistic locking stays an option if retries become common.
 - [ ] **Hot clearing account:** every deposit in a currency updates that currency's one clearing account, so deposits in a currency run one at a time. Accept and document this for now. The sourced pattern (Modern Treasury, TigerBeetle) is to not lock hot accounts and not make deposits wait on their balance: apply their balance asynchronously, or keep cumulative debits and credits. Splitting one clearing account into several is not confirmed by any source found.
 - [ ] **Database should enforce the domain:** `posting.currency` can disagree with the account's currency. Make `(id, currency)` unique on `account` and add a composite foreign key `(account_id, currency)` from `posting`. Add the deferred zero-sum constraint trigger (roadmap item 1, optional) so an unbalanced entry can't be stored.
 - [ ] **Transfers need the duplicate-reference constraint too:** the transaction and the concurrency handling are done (see above). Only `UNIQUE (type, reference)` and its exception remain.
 - [ ] **Small test gap:** the unsupported-currency test checks that no entry was saved, but not that the customer account is unchanged.
+
+## Transfers API
+
+- [ ] **Split `IllegalArgumentException` into specific exceptions** (same account, non-positive amount, non-customer account), so each gets its own problem type. Do it before any client depends on telling them apart. `ApiExceptionHandler` marks the shortcut.
+- [ ] **`Location` header points at nothing:** `POST /transfers` returns `/journal-entries/{id}`, and no such endpoint exists. Build it, or drop the header.
+- [ ] **No authentication or ownership check:** anyone who can reach `POST /transfers` can move money out of any account. Do not expose it publicly until roadmap item 6 is done. Design: scope check in the controller, ownership check in `TransferService` with a caller id passed in, and an `owner` on `Account`.
+- [ ] **Accounts endpoints:** a client cannot create or list accounts yet (`POST /accounts`, `GET /accounts`).
+- [ ] **Deposit endpoint:** `DepositService` is a bean now (`LedgerConfig`), but nothing calls it over HTTP yet.
+- [x] **Mockito warning:** done. The surefire `argLine` in `pom.xml` now loads Mockito as a Java agent at startup (the jar's path comes from `maven-dependency-plugin`), so the "self-attaching" warning is gone and a future JDK will not block it. The empty `argLine` property keeps it working when JaCoCo is skipped.
 
 ## Supply chain
 

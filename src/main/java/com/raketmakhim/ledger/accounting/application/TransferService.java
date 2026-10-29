@@ -14,7 +14,9 @@ import com.raketmakhim.ledger.accounting.domain.money.Money;
 /**
  * Moves money from one customer account to another.
  * Both accounts are updated and everything is saved only after every rule has passed.
- * The saves run in one transaction, which is run again if another request changes the same accounts.
+ * It must run in one transaction, which is run again if another request changes the same accounts:
+ * the adapter package wraps it for that (TransactionalTransferService). It reads the accounts itself,
+ * so the whole method is safe to repeat.
  */
 public class TransferService {
 
@@ -22,15 +24,12 @@ public class TransferService {
     private final JournalEntryRepository entries;
     private final IdGenerator ids;
     private final Clock clock;
-    private final TransactionRunner transactions;
 
-    public TransferService(AccountRepository accounts, JournalEntryRepository entries, IdGenerator ids, Clock clock,
-                           TransactionRunner transactions){
+    public TransferService(AccountRepository accounts, JournalEntryRepository entries, IdGenerator ids, Clock clock){
         this.accounts = accounts;
         this.entries = entries;
         this.ids = ids;
         this.clock = clock;
-        this.transactions = transactions;
     }
 
     public JournalEntry transfer(UUID fromId, UUID toId, Money amount, String reference){
@@ -40,24 +39,22 @@ public class TransferService {
         if (fromId.equals(toId)){
             throw new IllegalArgumentException("Cannot transfer to the same account.");
         }
-        return transactions.inTransaction(() -> {
-            Account from = accounts.getById(fromId);
-            Account to = accounts.getById(toId);
-            Checks.customerAccount(from, "Transfer");
-            Checks.customerAccount(to, "Transfer");
+        Account from = accounts.getById(fromId);
+        Account to = accounts.getById(toId);
+        Checks.customerAccount(from, "Transfer");
+        Checks.customerAccount(to, "Transfer");
 
-            Posting fromPosting = new Posting(ids.newId(), from.id(), amount.negate());
-            Posting toPosting = new Posting(ids.newId(), to.id(), amount);
-            JournalEntry entry = new JournalEntry(ids.newId(), EntryType.TRANSFER, reference, clock.instant(),
-                    List.of(fromPosting, toPosting));
+        Posting fromPosting = new Posting(ids.newId(), from.id(), amount.negate());
+        Posting toPosting = new Posting(ids.newId(), to.id(), amount);
+        JournalEntry entry = new JournalEntry(ids.newId(), EntryType.TRANSFER, reference, clock.instant(),
+                List.of(fromPosting, toPosting));
 
-            Account updatedFrom = from.applyPosting(fromPosting);
-            Account updatedTo = to.applyPosting(toPosting);
+        Account updatedFrom = from.applyPosting(fromPosting);
+        Account updatedTo = to.applyPosting(toPosting);
 
-            accounts.save(updatedFrom);
-            accounts.save(updatedTo);
-            entries.save(entry);
-            return entry;
-        });
+        accounts.save(updatedFrom);
+        accounts.save(updatedTo);
+        entries.save(entry);
+        return entry;
     }
 }

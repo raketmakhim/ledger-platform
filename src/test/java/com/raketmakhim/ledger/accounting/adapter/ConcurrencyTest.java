@@ -1,11 +1,9 @@
 package com.raketmakhim.ledger.accounting.adapter;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 import java.math.BigDecimal;
-import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -23,17 +21,14 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.context.annotation.Import;
+import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
+import com.raketmakhim.ledger.TestcontainersConfiguration;
 import com.raketmakhim.ledger.accounting.adapter.persistence.JpaAccountRepository;
-import com.raketmakhim.ledger.accounting.adapter.persistence.JpaJournalEntryRepository;
-import com.raketmakhim.ledger.accounting.application.ConcurrentUpdateException;
 import com.raketmakhim.ledger.accounting.application.DepositService;
-import com.raketmakhim.ledger.accounting.application.JournalEntryRepository;
+import com.raketmakhim.ledger.accounting.application.IdGenerator;
 import com.raketmakhim.ledger.accounting.application.TransferService;
 import com.raketmakhim.ledger.accounting.domain.account.Account;
 import com.raketmakhim.ledger.accounting.domain.account.AccountStatus;
@@ -43,41 +38,30 @@ import com.raketmakhim.ledger.accounting.domain.money.Money;
 
 /**
  * Many requests at once against a real Postgres. Whatever order they run in, no money may be created or lost.
- * Each request may succeed, run out of retries (ConcurrentUpdateException), or find too little money:
+ * Each request may succeed, run out of retries (ConcurrencyFailureException), or find too little money:
  * the tests check the books against the requests that succeeded.
  */
 @Tag("integration")
 @SpringBootTest
-@Testcontainers
+@Import(TestcontainersConfiguration.class)
 class ConcurrencyTest {
 
     private static final Currency GBP = Currency.getInstance("GBP");
-
-    @Container
-    @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17");
 
     @Autowired
     JpaAccountRepository accounts;
 
     @Autowired
-    JpaJournalEntryRepository entries;
+    TransferService transfers;
 
     @Autowired
-    SpringTransactionRunner transactions;
+    DepositService deposits;
 
     @Autowired
     JdbcTemplate jdbc;
 
-    private final UuidV7IdGenerator ids = new UuidV7IdGenerator();
-
-    private TransferService transfers() {
-        return new TransferService(accounts, entries, ids, Clock.systemUTC(), transactions);
-    }
-
-    private DepositService deposits(JournalEntryRepository entryRepository) {
-        return new DepositService(accounts, entryRepository, ids, Clock.systemUTC(), transactions);
-    }
+    @Autowired
+    IdGenerator ids;
 
     private UUID newCustomer(String balance) {
         UUID id = ids.newId();
@@ -113,7 +97,7 @@ class ConcurrencyTest {
                         succeeded.incrementAndGet();
                     } catch (InsufficientFundsException e) {
                         notEnoughMoney.incrementAndGet();
-                    } catch (ConcurrentUpdateException e) {
+                    } catch (ConcurrencyFailureException e) {
                         gaveUp.incrementAndGet();
                     }
                     return null;
@@ -133,7 +117,6 @@ class ConcurrencyTest {
     void manyDepositsIntoOneAccountAreAllCountedExactlyOnce() throws Exception {
         UUID customer = newCustomer("0");
         Money clearingBefore = accounts.findClearingAccount(GBP).orElseThrow().balance();
-        DepositService deposits = deposits(entries);
         List<Runnable> tasks = new ArrayList<>();
         for (int i = 0; i < 20; i++) {
             String reference = "D-" + i;
@@ -154,7 +137,6 @@ class ConcurrencyTest {
     void manyTransfersOutOfOneAccountCanNeverSpendMoreThanItHas() throws Exception {
         UUID from = newCustomer("100");
         UUID to = newCustomer("0");
-        TransferService transfers = transfers();
         List<Runnable> tasks = new ArrayList<>();
         for (int i = 0; i < 20; i++) {
             String reference = "S-" + i;
@@ -172,7 +154,6 @@ class ConcurrencyTest {
     void transfersInOppositeDirectionsFinishAndKeepTheTotal() {
         UUID a = newCustomer("1000");
         UUID b = newCustomer("1000");
-        TransferService transfers = transfers();
         List<Runnable> tasks = new ArrayList<>();
         for (int i = 0; i < 20; i++) {
             String reference = "O-" + i;
@@ -186,21 +167,6 @@ class ConcurrencyTest {
         assertThat(balance(a).plus(balance(b)).amount()).isEqualByComparingTo("2000");
         assertThat(outcome[0].succeeded()).isPositive();
         assertThat(entryCount("O-%")).isEqualTo(outcome[0].succeeded());
-    }
-
-    @Test
-    void aDepositThatFailsHalfwayChangesNothing() {
-        UUID customer = newCustomer("0");
-        Money clearingBefore = accounts.findClearingAccount(GBP).orElseThrow().balance();
-        DepositService failing = deposits(entry -> {
-            throw new IllegalStateException("the database went away");
-        });
-
-        assertThatThrownBy(() -> failing.deposit(customer, gbp("100"), "F-1"))
-                .isInstanceOf(IllegalStateException.class);
-
-        assertThat(balance(customer)).isEqualTo(gbp("0"));
-        assertThat(accounts.findClearingAccount(GBP).orElseThrow().balance()).isEqualTo(clearingBefore);
     }
 
     private int entryCount(String referencePattern) {

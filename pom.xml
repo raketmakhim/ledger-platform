@@ -15,6 +15,8 @@
 	<description>Payments and ledger platform</description>
 	<properties>
 		<java.version>21</java.version>
+		<!-- empty default, so the surefire argLine below still works when JaCoCo is skipped (it adds its agent here) -->
+		<argLine></argLine>
 		<!-- Newer patch releases than Spring Boot 3.5.16 ships, to fix high and critical vulnerabilities found by Trivy.
 		     Remove each line once Spring Boot's own version is at or above it. -->
 		<jackson-bom.version>2.21.8</jackson-bom.version>
@@ -37,6 +39,15 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-actuator</artifactId>
+		</dependency>
+		<dependency>
+			<!-- @Retryable runs through Spring AOP -->
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-aop</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.retry</groupId>
+			<artifactId>spring-retry</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>com.fasterxml.uuid</groupId>
@@ -92,6 +103,24 @@
 				<artifactId>spring-boot-maven-plugin</artifactId>
 			</plugin>
 			<plugin>
+				<!-- sets the property org.mockito:mockito-core:jar to the jar's path, used by surefire below -->
+				<artifactId>maven-dependency-plugin</artifactId>
+				<executions>
+					<execution>
+						<goals>
+							<goal>properties</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
+				<!-- loads Mockito as a Java agent, as newer JDKs require, instead of letting it attach itself -->
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<argLine>@{argLine} -javaagent:${org.mockito:mockito-core:jar}</argLine>
+				</configuration>
+			</plugin>
+			<plugin>
 				<groupId>org.jacoco</groupId>
 				<artifactId>jacoco-maven-plugin</artifactId>
 				<version>0.8.15</version>
@@ -99,6 +128,10 @@
 					<excludes>
 						<!-- need a real database, so only the integration tests cover them -->
 						<exclude>**/adapter/persistence/Jpa*</exclude>
+						<!-- the web tests do not load @Configuration classes, so only the integration tests run it -->
+						<exclude>**/adapter/LedgerConfig*</exclude>
+						<!-- the @Transactional and @Retryable wrappers: only a running Spring context can test them -->
+						<exclude>**/adapter/Transactional*</exclude>
 					</excludes>
 				</configuration>
 				<executions>

@@ -2,7 +2,7 @@
 
 ## 1. Ledger
 
-**Status:** Done, apart from two later pieces. Domain objects (`Money`, `Posting`, `JournalEntry`, `Account`) and the deposit flow (`DepositService` with its ports) are built and unit-tested. Built since: the repositories and entities (`accounting/adapter/persistence`). Left: one transaction around a deposit or transfer, and the optional database trigger.
+**Status:** Done, apart from two later pieces. Domain objects (`Money`, `Posting`, `JournalEntry`, `Account`) and the deposit flow (`DepositService` with its ports) are built and unit-tested. Built since: the repositories and entities (`accounting/adapter/persistence`). Also built: one transaction around a deposit or transfer (`@Transactional` and `@Retryable` on the wrapper services, see item 4). Left: the optional database trigger.
 
 **Tables** (in `V1__init.sql`)
 - `account` (id, currency, type, status, balance, version, created_at). `type` is CUSTOMER or SYSTEM, and only SYSTEM accounts may go negative.
@@ -26,7 +26,7 @@
 
 ## 2. Transfers API
 
-**Status:** The transfer service is built and unit-tested (`TransferService`, `accounting/application`). The domain exceptions it will map to problem types already exist (`InsufficientFundsException`, `AccountNotActiveException`, `CurrencyMismatchException`, `UnbalancedEntryException`); the REST endpoint, the request validation, the exception handler and the database adapter are not built.
+**Status:** Built: `POST /transfers` (`accounting/adapter/web`: `TransferController`, request and response records, `ApiExceptionHandler`), with `TransferService` wired as a bean in `LedgerConfig`. Tested at two levels: `TransferControllerTest` (`@WebMvcTest`, service mocked) and `TransferEndpointTest` (whole app, real Postgres). Not built: authentication and the ownership check (item 6), accounts endpoints (a client has no way to create or list accounts, so test accounts are inserted by hand), the duplicate-reference constraint (`todo.md`), and idempotency (item 3). The endpoint is open to anyone who can reach it, so it must not be exposed publicly yet.
 
 **Validation**
 - Amount is positive.
@@ -35,9 +35,9 @@
 - Currencies match until FX is built.
 - Sufficient funds.
 
-**Errors:** Use Spring's built-in `ProblemDetail`. Give each error a stable type URI (e.g. `/problems/insufficient-funds`) so clients can branch on it.
+**Errors** (done): Spring's built-in `ProblemDetail`, with a stable type URN per failure (`urn:ledger:problem:insufficient-funds`, `account-not-found`, `account-not-active`, `currency-mismatch`, `unsupported-currency`, `concurrent-update`, `invalid-request`, `internal-error`) so clients can branch on it. Statuses: 404 unknown account, 422 broken business rule, 409 retries used up, 400 bad request, 500 anything unexpected (the message is logged, not sent). Plain `IllegalArgumentException` (same account, non-positive amount, non-customer account) all map to one `invalid-request` type for now.
 
-**Response:** Return 201 with the transfer resource.
+**Request and response** (done): the body is `from`, `to`, `amount` (a string such as `"10.00"`), `currency` and `reference`. The client chooses the reference, because it will become the duplicate check. Returns 201 with the journal entry and a `Location` of `/journal-entries/{id}`, which does not exist yet.
 
 ## 3. Idempotency
 

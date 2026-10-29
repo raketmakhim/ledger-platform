@@ -48,7 +48,6 @@ class TransferServiceTest {
     private final Map<UUID, Account> accounts = new HashMap<>();
     private final List<JournalEntry> savedEntries = new ArrayList<>();
     private long nextId = 100;
-    private final DirectTransactionRunner transactions = new DirectTransactionRunner();
     private TransferService service;
 
     @BeforeEach
@@ -68,8 +67,7 @@ class TransferServiceTest {
         };
         JournalEntryRepository entryRepository = savedEntries::add;
         IdGenerator ids = () -> new UUID(2, nextId++);
-        service = new TransferService(accountRepository, entryRepository, ids, Clock.fixed(NOW, ZoneOffset.UTC),
-                transactions);
+        service = new TransferService(accountRepository, entryRepository, ids, Clock.fixed(NOW, ZoneOffset.UTC));
 
         add(ALICE, GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE, "100");
         add(BOB, GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE, "0");
@@ -97,13 +95,6 @@ class TransferServiceTest {
         assertThat(accounts.get(ALICE).balance()).isEqualTo(gbp("60"));
         assertThat(accounts.get(BOB).balance()).isEqualTo(gbp("40"));
         assertThat(savedEntries).containsExactly(entry);
-    }
-
-    @Test
-    void transferRunsInsideOneTransaction() {
-        service.transfer(ALICE, BOB, gbp("40"), "T-1");
-
-        assertThat(transactions.runs()).isEqualTo(1);
     }
 
     @Test

@@ -14,14 +14,12 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.context.annotation.Import;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
-import com.raketmakhim.ledger.accounting.adapter.UuidV7IdGenerator;
+import com.raketmakhim.ledger.TestcontainersConfiguration;
+import com.raketmakhim.ledger.accounting.application.IdGenerator;
 import com.raketmakhim.ledger.accounting.domain.account.Account;
 import com.raketmakhim.ledger.accounting.domain.account.AccountStatus;
 import com.raketmakhim.ledger.accounting.domain.account.AccountType;
@@ -32,15 +30,11 @@ import com.raketmakhim.ledger.accounting.domain.money.Money;
 
 @Tag("integration")
 @SpringBootTest
-@Testcontainers
+@Import(TestcontainersConfiguration.class)
 class JpaRepositoriesTest {
 
     private static final Currency GBP = Currency.getInstance("GBP");
     private static final Instant NOW = Instant.parse("2026-10-15T12:00:00Z");
-
-    @Container
-    @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17");
 
     @Autowired
     JpaAccountRepository accounts;
@@ -51,7 +45,8 @@ class JpaRepositoriesTest {
     @Autowired
     JdbcTemplate jdbc;
 
-    private final UuidV7IdGenerator ids = new UuidV7IdGenerator();
+    @Autowired
+    IdGenerator ids;
 
     private Account newCustomer(String balance) {
         return new Account(ids.newId(), GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE,
