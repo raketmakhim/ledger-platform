@@ -26,7 +26,7 @@
 
 ## 2. Transfers API
 
-**Status:** Built: `POST /transfers` (`accounting/adapter/web`: `TransferController`, request and response records, `ApiExceptionHandler`), with `TransferService` wired as a bean in `LedgerConfig`. Tested at two levels: `TransferControllerTest` (`@WebMvcTest`, service mocked) and `TransferEndpointTest` (whole app, real Postgres). Not built: authentication and the ownership check (item 6), accounts endpoints (a client has no way to create or list accounts, so test accounts are inserted by hand), the duplicate-reference constraint (`todo.md`), and idempotency (item 3). The endpoint is open to anyone who can reach it, so it must not be exposed publicly yet.
+**Status:** Built: `POST /transfers` (`accounting/adapter/web`: `TransferController`, request and response records, `ApiExceptionHandler`), with `TransferService` wired as a bean in `LedgerConfig`. Tested at two levels: `TransferControllerTest` (`@WebMvcTest`, service mocked) and `TransferEndpointTest` (whole app, real Postgres). Not built: authentication and the ownership check (item 6), accounts endpoints (a client has no way to create or list accounts, so test accounts are inserted by hand), and idempotency (item 3). A reused `reference` is already refused with a 409 (`UNIQUE (type, reference)`), but the original response is not replayed. The endpoint is open to anyone who can reach it, so it must not be exposed publicly yet.
 
 **Validation**
 - Amount is positive.

@@ -23,6 +23,7 @@ import com.raketmakhim.ledger.accounting.application.IdGenerator;
 import com.raketmakhim.ledger.accounting.domain.account.Account;
 import com.raketmakhim.ledger.accounting.domain.account.AccountStatus;
 import com.raketmakhim.ledger.accounting.domain.account.AccountType;
+import com.raketmakhim.ledger.accounting.domain.journal.DuplicateReferenceException;
 import com.raketmakhim.ledger.accounting.domain.journal.EntryType;
 import com.raketmakhim.ledger.accounting.domain.journal.JournalEntry;
 import com.raketmakhim.ledger.accounting.domain.journal.Posting;
@@ -132,5 +133,44 @@ class JpaRepositoriesTest {
         assertThat((BigDecimal) postings.get(0).get("amount")).isEqualByComparingTo("-40");
         assertThat(postings.get(1)).containsEntry("account_id", to.id());
         assertThat((BigDecimal) postings.get(1).get("amount")).isEqualByComparingTo("40");
+    }
+
+    private JournalEntry entry(EntryType type, String reference, Account from, Account to) {
+        return new JournalEntry(ids.newId(), type, reference, NOW, List.of(
+                new Posting(ids.newId(), from.id(), gbp("-1")), new Posting(ids.newId(), to.id(), gbp("1"))));
+    }
+
+    private int count(String sql, Object arg) {
+        return jdbc.queryForObject(sql, Integer.class, arg);
+    }
+
+    @Test
+    void aSecondEntryWithTheSameTypeAndReferenceIsRefusedAndLeavesNothingBehind() {
+        Account from = newCustomer("100");
+        Account to = newCustomer("0");
+        accounts.save(from);
+        accounts.save(to);
+        entries.save(entry(EntryType.TRANSFER, "DUP-1", from, to));
+        JournalEntry repeated = entry(EntryType.TRANSFER, "DUP-1", from, to);
+
+        assertThatThrownBy(() -> entries.save(repeated))
+                .isInstanceOf(DuplicateReferenceException.class)
+                .hasMessageContaining("DUP-1");
+
+        assertThat(count("SELECT count(*) FROM journal_entry WHERE reference = ?", "DUP-1")).isEqualTo(1);
+        assertThat(count("SELECT count(*) FROM posting WHERE entry_id = ?", repeated.id())).isZero();
+    }
+
+    @Test
+    void theSameReferenceIsAllowedForADifferentEntryType() {
+        Account from = newCustomer("100");
+        Account to = newCustomer("0");
+        accounts.save(from);
+        accounts.save(to);
+
+        entries.save(entry(EntryType.TRANSFER, "DUP-2", from, to));
+        entries.save(entry(EntryType.DEPOSIT, "DUP-2", from, to));
+
+        assertThat(count("SELECT count(*) FROM journal_entry WHERE reference = ?", "DUP-2")).isEqualTo(2);
     }
 }

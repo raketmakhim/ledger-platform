@@ -79,7 +79,7 @@ The services depend on interfaces, not implementations:
 ## Database (`db/migration/V1__init.sql`)
 
 - `account`: id, currency, type, status, balance, version, created at. A `CHECK` stops a customer balance going negative, and a partial unique index allows one `SYSTEM` account per currency.
-- `journal_entry`: id, type, reference, created at. `type` is limited to the three entry types.
+- `journal_entry`: id, type, reference, created at. `type` is limited to the three entry types, and `(type, reference)` is unique, so a repeated request cannot move money twice. `JpaJournalEntryRepository` flushes on save and turns a violation of that constraint (found by its name) into `DuplicateReferenceException`, a 409 in the API.
 - `posting`: id, entry, account, signed amount, currency. Both foreign keys are indexed.
 - Amounts are `NUMERIC(24,4)` and times are `TIMESTAMPTZ`.
 - The migration also seeds a clearing account for GBP, EUR, USD and JPY.

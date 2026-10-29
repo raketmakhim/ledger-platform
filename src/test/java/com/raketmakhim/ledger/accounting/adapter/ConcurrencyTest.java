@@ -34,6 +34,7 @@ import com.raketmakhim.ledger.accounting.domain.account.Account;
 import com.raketmakhim.ledger.accounting.domain.account.AccountStatus;
 import com.raketmakhim.ledger.accounting.domain.account.AccountType;
 import com.raketmakhim.ledger.accounting.domain.account.InsufficientFundsException;
+import com.raketmakhim.ledger.accounting.domain.journal.DuplicateReferenceException;
 import com.raketmakhim.ledger.accounting.domain.money.Money;
 
 /**
@@ -77,7 +78,7 @@ class ConcurrencyTest {
         return new Money(new BigDecimal(amount), GBP);
     }
 
-    private record Outcome(int succeeded, int notEnoughMoney, int gaveUp) {
+    private record Outcome(int succeeded, int notEnoughMoney, int gaveUp, int duplicates) {
     }
 
     /** Runs every task at the same moment on its own thread, and counts how each one ended. */
@@ -86,6 +87,7 @@ class ConcurrencyTest {
         AtomicInteger succeeded = new AtomicInteger();
         AtomicInteger notEnoughMoney = new AtomicInteger();
         AtomicInteger gaveUp = new AtomicInteger();
+        AtomicInteger duplicates = new AtomicInteger();
         ExecutorService pool = Executors.newFixedThreadPool(tasks.size());
         try {
             List<Future<?>> futures = new ArrayList<>();
@@ -99,6 +101,8 @@ class ConcurrencyTest {
                         notEnoughMoney.incrementAndGet();
                     } catch (ConcurrencyFailureException e) {
                         gaveUp.incrementAndGet();
+                    } catch (DuplicateReferenceException e) {
+                        duplicates.incrementAndGet();
                     }
                     return null;
                 }));
@@ -110,7 +114,7 @@ class ConcurrencyTest {
         } finally {
             pool.shutdownNow();
         }
-        return new Outcome(succeeded.get(), notEnoughMoney.get(), gaveUp.get());
+        return new Outcome(succeeded.get(), notEnoughMoney.get(), gaveUp.get(), duplicates.get());
     }
 
     @Test
@@ -167,6 +171,23 @@ class ConcurrencyTest {
         assertThat(balance(a).plus(balance(b)).amount()).isEqualByComparingTo("2000");
         assertThat(outcome[0].succeeded()).isPositive();
         assertThat(entryCount("O-%")).isEqualTo(outcome[0].succeeded());
+    }
+
+    @Test
+    void manyRequestsWithTheSameReferenceMoveMoneyAtMostOnce() throws Exception {
+        UUID from = newCustomer("1000");
+        UUID to = newCustomer("0");
+        List<Runnable> tasks = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            tasks.add(() -> transfers.transfer(from, to, gbp("10"), "SAME-REF"));
+        }
+
+        Outcome outcome = runTogether(tasks);
+
+        assertThat(outcome.succeeded()).isLessThanOrEqualTo(1);
+        assertThat(outcome.succeeded() + outcome.duplicates() + outcome.gaveUp()).isEqualTo(10);
+        assertThat(balance(to).amount()).isEqualByComparingTo(BigDecimal.valueOf(10L * outcome.succeeded()));
+        assertThat(entryCount("SAME-REF")).isEqualTo(outcome.succeeded());
     }
 
     private int entryCount(String referencePattern) {

@@ -13,7 +13,9 @@ CREATE TABLE journal_entry (
     id          UUID PRIMARY KEY,
     type        VARCHAR(30)     NOT NULL CHECK (type IN ('DEPOSIT', 'TRANSFER', 'REVERSAL')),
     reference   VARCHAR(36)     NOT NULL,
-    created_at  TIMESTAMPTZ     NOT NULL DEFAULT now()
+    created_at  TIMESTAMPTZ     NOT NULL DEFAULT now(),
+    -- the backstop for repeated requests: the app looks for this constraint by name
+    CONSTRAINT journal_entry_type_reference_uq UNIQUE (type, reference)
 );
 
 CREATE TABLE posting (

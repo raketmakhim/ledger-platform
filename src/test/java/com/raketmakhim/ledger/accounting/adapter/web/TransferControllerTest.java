@@ -36,6 +36,7 @@ import com.raketmakhim.ledger.accounting.domain.account.AccountNotActiveExceptio
 import com.raketmakhim.ledger.accounting.domain.account.AccountNotFoundException;
 import com.raketmakhim.ledger.accounting.domain.account.AccountStatus;
 import com.raketmakhim.ledger.accounting.domain.account.InsufficientFundsException;
+import com.raketmakhim.ledger.accounting.domain.journal.DuplicateReferenceException;
 import com.raketmakhim.ledger.accounting.domain.journal.EntryType;
 import com.raketmakhim.ledger.accounting.domain.journal.JournalEntry;
 import com.raketmakhim.ledger.accounting.domain.journal.Posting;
@@ -157,6 +158,7 @@ class TransferControllerTest {
                 // same account, non-positive amount, system account: one type until they get their own exceptions
                 Arguments.of(new IllegalArgumentException("Cannot transfer to the same account."), 400, "invalid-request"),
                 Arguments.of(new OptimisticLockingFailureException("clash"), 409, "concurrent-update"),
+                Arguments.of(new DuplicateReferenceException(EntryType.TRANSFER, "rent-oct"), 409, "duplicate-reference"),
                 Arguments.of(new IllegalStateException("db password is hunter2"), 500, "internal-error"));
     }
 

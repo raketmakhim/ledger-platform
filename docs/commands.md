@@ -77,7 +77,7 @@ PowerShell does not support `<`, so on Windows use this for the second command:
 Get-Content docs\postman\seed-accounts.sql | docker compose exec -T postgres psql -U ledger -d ledger
 ```
 
-Then import [docs/postman/ledger-platform.postman_collection.json](postman/ledger-platform.postman_collection.json) into Postman and run it. It has the three health checks, one successful transfer and the error cases, each with tests. The two demo account ids are collection variables (`fromAccountId`, `toAccountId`), as is `baseUrl` (`http://localhost:8080`). Each request uses a new UUID as its `reference`.
+Then import [docs/postman/ledger-platform.postman_collection.json](postman/ledger-platform.postman_collection.json) into Postman and run it. It has the three health checks, then transfers split into a happy path (one successful transfer) and a sad path (the error cases, including a reused reference), each with tests. The two demo account ids are collection variables (`fromAccountId`, `toAccountId`), as is `baseUrl` (`http://localhost:8080`). Each request uses a new UUID as its `reference`.
 
 ## Build
 

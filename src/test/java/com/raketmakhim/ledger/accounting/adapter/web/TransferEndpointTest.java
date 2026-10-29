@@ -104,6 +104,21 @@ class TransferEndpointTest {
     }
 
     @Test
+    void reusingAReferenceIsRefusedAndMovesNoMoneyTheSecondTime() throws Exception {
+        UUID alice = newCustomer("100.00");
+        UUID bob = newCustomer("0.00");
+
+        transfer(alice, bob, "10.00", "E2E-DUP").andExpect(status().isCreated());
+        transfer(alice, bob, "10.00", "E2E-DUP")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.type").value("urn:ledger:problem:duplicate-reference"));
+
+        assertThat(balance(alice)).isEqualTo(gbp("90.00"));
+        assertThat(balance(bob)).isEqualTo(gbp("10.00"));
+        assertThat(entryCount("E2E-DUP")).isEqualTo(1);
+    }
+
+    @Test
     void aTransferFromAnAccountThatDoesNotExistReturns404() throws Exception {
         UUID bob = newCustomer("5.00");
 

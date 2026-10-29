@@ -1,13 +1,22 @@
 {
   "info": {
     "name": "Ledger Platform",
-    "description": "Requests for the endpoints built so far. Start the app (./task up), then load the two demo accounts: see docs/postman/seed-accounts.sql. Each request has tests, so the collection runner shows what passed. The endpoint has no authentication yet.",
+    "description": "Requests for the endpoints built so far. Start the app (./task up), then load the two demo accounts: see docs/postman/seed-accounts.sql. Health checks, then Transfers split into Happy path and Sad path (the error cases). Each request has tests, so the collection runner shows what passed. The endpoint has no authentication yet.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:8080" },
-    { "key": "fromAccountId", "value": "11111111-1111-7111-8111-111111111111" },
-    { "key": "toAccountId", "value": "22222222-2222-7222-8222-222222222222" }
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "fromAccountId",
+      "value": "11111111-1111-7111-8111-111111111111"
+    },
+    {
+      "key": "toAccountId",
+      "value": "22222222-2222-7222-8222-222222222222"
+    }
   ],
   "item": [
     {
@@ -18,7 +27,16 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": { "raw": "{{baseUrl}}/actuator/health", "host": ["{{baseUrl}}"], "path": ["actuator", "health"] }
+            "url": {
+              "raw": "{{baseUrl}}/actuator/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            }
           },
           "event": [
             {
@@ -39,7 +57,17 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": { "raw": "{{baseUrl}}/actuator/health/liveness", "host": ["{{baseUrl}}"], "path": ["actuator", "health", "liveness"] },
+            "url": {
+              "raw": "{{baseUrl}}/actuator/health/liveness",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "health",
+                "liveness"
+              ]
+            },
             "description": "The app alone. It stays UP when the database is down, so an orchestrator does not restart the app for a database problem."
           },
           "event": [
@@ -60,7 +88,17 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": { "raw": "{{baseUrl}}/actuator/health/readiness", "host": ["{{baseUrl}}"], "path": ["actuator", "health", "readiness"] },
+            "url": {
+              "raw": "{{baseUrl}}/actuator/health/readiness",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "health",
+                "readiness"
+              ]
+            },
             "description": "Needs the database. It returns 503 when Postgres cannot be reached, so a load balancer stops sending requests."
           },
           "event": [
@@ -82,206 +120,385 @@
       "name": "Transfers",
       "item": [
         {
-          "name": "Transfer 10.00 GBP (201)",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"from\": \"{{fromAccountId}}\",\n  \"to\": \"{{toAccountId}}\",\n  \"amount\": \"10.00\",\n  \"currency\": \"GBP\",\n  \"reference\": \"{{$guid}}\"\n}"
-            },
-            "url": { "raw": "{{baseUrl}}/transfers", "host": ["{{baseUrl}}"], "path": ["transfers"] },
-            "description": "Moves money between the two demo accounts. The reference is a new UUID each time, because it will become the duplicate check."
-          },
-          "event": [
+          "name": "Happy path",
+          "item": [
             {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
-                  "const body = pm.response.json();",
-                  "pm.test('Location points at the entry', () => pm.expect(pm.response.headers.get('Location')).to.eql('/journal-entries/' + body.id));",
-                  "pm.test('it is a TRANSFER with two postings', () => {",
-                  "  pm.expect(body.type).to.eql('TRANSFER');",
-                  "  pm.expect(body.postings.length).to.eql(2);",
-                  "});",
-                  "pm.test('money leaves from and arrives at to', () => {",
-                  "  const out = body.postings.find(p => p.accountId === pm.collectionVariables.get('fromAccountId'));",
-                  "  const into = body.postings.find(p => p.accountId === pm.collectionVariables.get('toAccountId'));",
-                  "  pm.expect(out.amount).to.eql('-10.00');",
-                  "  pm.expect(into.amount).to.eql('10.00');",
-                  "});"
-                ]
-              }
+              "name": "Transfer 10.00 GBP (201)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"from\": \"{{fromAccountId}}\",\n  \"to\": \"{{toAccountId}}\",\n  \"amount\": \"10.00\",\n  \"currency\": \"GBP\",\n  \"reference\": \"{{$guid}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/transfers",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transfers"
+                  ]
+                },
+                "description": "Moves money between the two demo accounts. The reference is a new UUID each time, because it will become the duplicate check."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                      "const body = pm.response.json();",
+                      "pm.test('Location points at the entry', () => pm.expect(pm.response.headers.get('Location')).to.eql('/journal-entries/' + body.id));",
+                      "pm.test('it is a TRANSFER with two postings', () => {",
+                      "  pm.expect(body.type).to.eql('TRANSFER');",
+                      "  pm.expect(body.postings.length).to.eql(2);",
+                      "});",
+                      "pm.test('money leaves from and arrives at to', () => {",
+                      "  const out = body.postings.find(p => p.accountId === pm.collectionVariables.get('fromAccountId'));",
+                      "  const into = body.postings.find(p => p.accountId === pm.collectionVariables.get('toAccountId'));",
+                      "  pm.expect(out.amount).to.eql('-10.00');",
+                      "  pm.expect(into.amount).to.eql('10.00');",
+                      "});"
+                    ]
+                  }
+                }
+              ]
             }
           ]
         },
         {
-          "name": "Not enough money (422)",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"from\": \"{{fromAccountId}}\",\n  \"to\": \"{{toAccountId}}\",\n  \"amount\": \"999999.00\",\n  \"currency\": \"GBP\",\n  \"reference\": \"{{$guid}}\"\n}"
-            },
-            "url": { "raw": "{{baseUrl}}/transfers", "host": ["{{baseUrl}}"], "path": ["transfers"] }
-          },
-          "event": [
+          "name": "Sad path",
+          "item": [
             {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('status is 422', () => pm.response.to.have.status(422));",
-                  "pm.test('type is insufficient-funds', () => pm.expect(pm.response.json().type).to.eql('urn:ledger:problem:insufficient-funds'));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Unknown account (404)",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"from\": \"{{$guid}}\",\n  \"to\": \"{{toAccountId}}\",\n  \"amount\": \"1.00\",\n  \"currency\": \"GBP\",\n  \"reference\": \"{{$guid}}\"\n}"
+              "name": "Reuse the same reference (409)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"from\": \"{{fromAccountId}}\",\n  \"to\": \"{{toAccountId}}\",\n  \"amount\": \"10.00\",\n  \"currency\": \"GBP\",\n  \"reference\": \"{{lastReference}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/transfers",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transfers"
+                  ]
+                },
+                "description": "Sends a transfer with a new reference, then this request sends the same reference again. The second one is refused and moves no money."
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const reference = pm.variables.replaceIn('{{$guid}}');",
+                      "const first = {",
+                      "  from: pm.collectionVariables.get('fromAccountId'),",
+                      "  to: pm.collectionVariables.get('toAccountId'),",
+                      "  amount: '1.00',",
+                      "  currency: 'GBP',",
+                      "  reference: reference",
+                      "};",
+                      "pm.sendRequest({",
+                      "  url: pm.collectionVariables.get('baseUrl') + '/transfers',",
+                      "  method: 'POST',",
+                      "  header: { 'Content-Type': 'application/json' },",
+                      "  body: { mode: 'raw', raw: JSON.stringify(first) }",
+                      "}, (error, response) => {",
+                      "  if (error || response.code !== 201) {",
+                      "    throw new Error('The first transfer should return 201, got ' + (error || response.code));",
+                      "  }",
+                      "  pm.collectionVariables.set('lastReference', reference);",
+                      "});"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('status is 409', () => pm.response.to.have.status(409));",
+                      "pm.test('type is duplicate-reference', () => pm.expect(pm.response.json().type).to.eql('urn:ledger:problem:duplicate-reference'));"
+                    ]
+                  }
+                }
+              ]
             },
-            "url": { "raw": "{{baseUrl}}/transfers", "host": ["{{baseUrl}}"], "path": ["transfers"] }
-          },
-          "event": [
             {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('status is 404', () => pm.response.to.have.status(404));",
-                  "pm.test('type is account-not-found', () => pm.expect(pm.response.json().type).to.eql('urn:ledger:problem:account-not-found'));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Wrong currency for the accounts (422)",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"from\": \"{{fromAccountId}}\",\n  \"to\": \"{{toAccountId}}\",\n  \"amount\": \"1.00\",\n  \"currency\": \"USD\",\n  \"reference\": \"{{$guid}}\"\n}"
+              "name": "Not enough money (422)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"from\": \"{{fromAccountId}}\",\n  \"to\": \"{{toAccountId}}\",\n  \"amount\": \"999999.00\",\n  \"currency\": \"GBP\",\n  \"reference\": \"{{$guid}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/transfers",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transfers"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('status is 422', () => pm.response.to.have.status(422));",
+                      "pm.test('type is insufficient-funds', () => pm.expect(pm.response.json().type).to.eql('urn:ledger:problem:insufficient-funds'));"
+                    ]
+                  }
+                }
+              ]
             },
-            "url": { "raw": "{{baseUrl}}/transfers", "host": ["{{baseUrl}}"], "path": ["transfers"] }
-          },
-          "event": [
             {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('status is 422', () => pm.response.to.have.status(422));",
-                  "pm.test('type is currency-mismatch', () => pm.expect(pm.response.json().type).to.eql('urn:ledger:problem:currency-mismatch'));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Same account on both sides (400)",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"from\": \"{{fromAccountId}}\",\n  \"to\": \"{{fromAccountId}}\",\n  \"amount\": \"1.00\",\n  \"currency\": \"GBP\",\n  \"reference\": \"{{$guid}}\"\n}"
+              "name": "Unknown account (404)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"from\": \"{{$guid}}\",\n  \"to\": \"{{toAccountId}}\",\n  \"amount\": \"1.00\",\n  \"currency\": \"GBP\",\n  \"reference\": \"{{$guid}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/transfers",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transfers"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('status is 404', () => pm.response.to.have.status(404));",
+                      "pm.test('type is account-not-found', () => pm.expect(pm.response.json().type).to.eql('urn:ledger:problem:account-not-found'));"
+                    ]
+                  }
+                }
+              ]
             },
-            "url": { "raw": "{{baseUrl}}/transfers", "host": ["{{baseUrl}}"], "path": ["transfers"] }
-          },
-          "event": [
             {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('status is 400', () => pm.response.to.have.status(400));",
-                  "pm.test('type is invalid-request', () => pm.expect(pm.response.json().type).to.eql('urn:ledger:problem:invalid-request'));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Negative amount (400)",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"from\": \"{{fromAccountId}}\",\n  \"to\": \"{{toAccountId}}\",\n  \"amount\": \"-5.00\",\n  \"currency\": \"GBP\",\n  \"reference\": \"{{$guid}}\"\n}"
+              "name": "Wrong currency for the accounts (422)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"from\": \"{{fromAccountId}}\",\n  \"to\": \"{{toAccountId}}\",\n  \"amount\": \"1.00\",\n  \"currency\": \"USD\",\n  \"reference\": \"{{$guid}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/transfers",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transfers"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('status is 422', () => pm.response.to.have.status(422));",
+                      "pm.test('type is currency-mismatch', () => pm.expect(pm.response.json().type).to.eql('urn:ledger:problem:currency-mismatch'));"
+                    ]
+                  }
+                }
+              ]
             },
-            "url": { "raw": "{{baseUrl}}/transfers", "host": ["{{baseUrl}}"], "path": ["transfers"] }
-          },
-          "event": [
             {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('status is 400', () => pm.response.to.have.status(400));",
-                  "pm.test('type is invalid-request', () => pm.expect(pm.response.json().type).to.eql('urn:ledger:problem:invalid-request'));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Too many decimal places (400)",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"from\": \"{{fromAccountId}}\",\n  \"to\": \"{{toAccountId}}\",\n  \"amount\": \"10.001\",\n  \"currency\": \"GBP\",\n  \"reference\": \"{{$guid}}\"\n}"
+              "name": "Same account on both sides (400)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"from\": \"{{fromAccountId}}\",\n  \"to\": \"{{fromAccountId}}\",\n  \"amount\": \"1.00\",\n  \"currency\": \"GBP\",\n  \"reference\": \"{{$guid}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/transfers",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transfers"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('status is 400', () => pm.response.to.have.status(400));",
+                      "pm.test('type is invalid-request', () => pm.expect(pm.response.json().type).to.eql('urn:ledger:problem:invalid-request'));"
+                    ]
+                  }
+                }
+              ]
             },
-            "url": { "raw": "{{baseUrl}}/transfers", "host": ["{{baseUrl}}"], "path": ["transfers"] }
-          },
-          "event": [
             {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('status is 400', () => pm.response.to.have.status(400));",
-                  "pm.test('type is invalid-request', () => pm.expect(pm.response.json().type).to.eql('urn:ledger:problem:invalid-request'));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Missing field (400)",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"from\": \"{{fromAccountId}}\",\n  \"to\": \"{{toAccountId}}\",\n  \"currency\": \"GBP\",\n  \"reference\": \"{{$guid}}\"\n}"
+              "name": "Negative amount (400)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"from\": \"{{fromAccountId}}\",\n  \"to\": \"{{toAccountId}}\",\n  \"amount\": \"-5.00\",\n  \"currency\": \"GBP\",\n  \"reference\": \"{{$guid}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/transfers",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transfers"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('status is 400', () => pm.response.to.have.status(400));",
+                      "pm.test('type is invalid-request', () => pm.expect(pm.response.json().type).to.eql('urn:ledger:problem:invalid-request'));"
+                    ]
+                  }
+                }
+              ]
             },
-            "url": { "raw": "{{baseUrl}}/transfers", "host": ["{{baseUrl}}"], "path": ["transfers"] }
-          },
-          "event": [
             {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('status is 400', () => pm.response.to.have.status(400));",
-                  "pm.test('type is invalid-request', () => pm.expect(pm.response.json().type).to.eql('urn:ledger:problem:invalid-request'));"
-                ]
-              }
+              "name": "Too many decimal places (400)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"from\": \"{{fromAccountId}}\",\n  \"to\": \"{{toAccountId}}\",\n  \"amount\": \"10.001\",\n  \"currency\": \"GBP\",\n  \"reference\": \"{{$guid}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/transfers",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transfers"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('status is 400', () => pm.response.to.have.status(400));",
+                      "pm.test('type is invalid-request', () => pm.expect(pm.response.json().type).to.eql('urn:ledger:problem:invalid-request'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Missing field (400)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"from\": \"{{fromAccountId}}\",\n  \"to\": \"{{toAccountId}}\",\n  \"currency\": \"GBP\",\n  \"reference\": \"{{$guid}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/transfers",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transfers"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('status is 400', () => pm.response.to.have.status(400));",
+                      "pm.test('type is invalid-request', () => pm.expect(pm.response.json().type).to.eql('urn:ledger:problem:invalid-request'));"
+                    ]
+                  }
+                }
+              ]
             }
           ]
         }

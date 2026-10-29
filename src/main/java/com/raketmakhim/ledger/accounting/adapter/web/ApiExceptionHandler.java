@@ -20,6 +20,7 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 import com.raketmakhim.ledger.accounting.domain.account.AccountNotActiveException;
 import com.raketmakhim.ledger.accounting.domain.account.AccountNotFoundException;
 import com.raketmakhim.ledger.accounting.domain.account.InsufficientFundsException;
+import com.raketmakhim.ledger.accounting.domain.journal.DuplicateReferenceException;
 import com.raketmakhim.ledger.accounting.domain.money.CurrencyMismatchException;
 import com.raketmakhim.ledger.accounting.domain.money.UnsupportedCurrencyException;
 
@@ -47,6 +48,12 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(AccountNotActiveException.class)
     ProblemDetail accountNotActive(AccountNotActiveException e) {
         return problem(HttpStatus.UNPROCESSABLE_ENTITY, "account-not-active", "Account not active", e.getMessage());
+    }
+
+    // shortcut: a repeated request gets a 409. Replaying the first response is idempotency (roadmap item 3).
+    @ExceptionHandler(DuplicateReferenceException.class)
+    ProblemDetail duplicateReference(DuplicateReferenceException e) {
+        return problem(HttpStatus.CONFLICT, "duplicate-reference", "Duplicate reference", e.getMessage());
     }
 
     // The exception's message holds the balance, which the caller may not be allowed to see, so it is not sent.
