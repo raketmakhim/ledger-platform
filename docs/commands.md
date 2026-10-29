@@ -56,6 +56,23 @@ Tests that need Spring or a database must be tagged `@Tag("integration")`, or th
 
 The health endpoint is at http://localhost:8080/actuator/health.
 
+## Trying the API
+
+There is no endpoint to create accounts yet, so load two demo accounts first (safe to run again, it resets the balances):
+
+```bash
+./task up        # in one terminal: Postgres and the app
+docker compose exec -T postgres psql -U ledger -d ledger < docs/postman/seed-accounts.sql
+```
+
+PowerShell does not support `<`, so on Windows use this for the second command:
+
+```powershell
+Get-Content docs\postman\seed-accounts.sql | docker compose exec -T postgres psql -U ledger -d ledger
+```
+
+Then import [docs/postman/ledger-platform.postman_collection.json](postman/ledger-platform.postman_collection.json) into Postman and run it. It has a health check, one successful transfer and the error cases, each with tests. The two demo account ids are collection variables (`fromAccountId`, `toAccountId`), as is `baseUrl` (`http://localhost:8080`). Each request uses a new UUID as its `reference`.
+
 ## Build
 
 | What | Command |

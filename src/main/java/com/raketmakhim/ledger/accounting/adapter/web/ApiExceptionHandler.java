@@ -49,9 +49,11 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return problem(HttpStatus.UNPROCESSABLE_ENTITY, "account-not-active", "Account not active", e.getMessage());
     }
 
+    // The exception's message holds the balance, which the caller may not be allowed to see, so it is not sent.
     @ExceptionHandler(InsufficientFundsException.class)
     ProblemDetail insufficientFunds(InsufficientFundsException e) {
-        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "insufficient-funds", "Insufficient funds", e.getMessage());
+        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "insufficient-funds", "Insufficient funds",
+                "The source account does not have enough money for this transfer.");
     }
 
     @ExceptionHandler(CurrencyMismatchException.class)

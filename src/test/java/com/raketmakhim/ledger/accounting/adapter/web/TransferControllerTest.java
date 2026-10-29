@@ -177,6 +177,16 @@ class TransferControllerTest {
     }
 
     @Test
+    void insufficientFundsDoesNotRevealTheBalance() throws Exception {
+        when(transfers.transfer(any(), any(), any(), any()))
+                .thenThrow(new InsufficientFundsException(gbp("5.00"), gbp("10.00").negate()));
+
+        String response = send(validBody()).andReturn().getResponse().getContentAsString();
+
+        assertThat(response).doesNotContain("5.00");
+    }
+
+    @Test
     void anUnexpectedFailureDoesNotLeakItsMessage() throws Exception {
         when(transfers.transfer(any(), any(), any(), any())).thenThrow(new IllegalStateException("db password is hunter2"));
 
