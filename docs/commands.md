@@ -54,7 +54,13 @@ Tests that need Spring or a database must be tagged `@Tag("integration")`, or th
 | Stop it and delete the data (needed if you change `V1__init.sql` after it has run, or Flyway fails on a checksum mismatch) | `docker compose down -v` |
 | Run the app against that Postgres | `./mvnw spring-boot:run` |
 
-The health endpoint is at http://localhost:8080/actuator/health.
+Health endpoints (no details are shown):
+
+| URL | Meaning |
+|---|---|
+| http://localhost:8080/actuator/health | Overall status, and the names of the two groups below |
+| http://localhost:8080/actuator/health/liveness | The app is running. Stays UP if the database is down, so it is the one to use for "restart me" |
+| http://localhost:8080/actuator/health/readiness | The app can take traffic. Includes the database, and returns 503 when Postgres is unreachable |
 
 ## Trying the API
 
@@ -71,7 +77,7 @@ PowerShell does not support `<`, so on Windows use this for the second command:
 Get-Content docs\postman\seed-accounts.sql | docker compose exec -T postgres psql -U ledger -d ledger
 ```
 
-Then import [docs/postman/ledger-platform.postman_collection.json](postman/ledger-platform.postman_collection.json) into Postman and run it. It has a health check, one successful transfer and the error cases, each with tests. The two demo account ids are collection variables (`fromAccountId`, `toAccountId`), as is `baseUrl` (`http://localhost:8080`). Each request uses a new UUID as its `reference`.
+Then import [docs/postman/ledger-platform.postman_collection.json](postman/ledger-platform.postman_collection.json) into Postman and run it. It has the three health checks, one successful transfer and the error cases, each with tests. The two demo account ids are collection variables (`fromAccountId`, `toAccountId`), as is `baseUrl` (`http://localhost:8080`). Each request uses a new UUID as its `reference`.
 
 ## Build
 

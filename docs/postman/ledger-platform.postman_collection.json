@@ -12,21 +12,69 @@
   "item": [
     {
       "name": "Health",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": { "raw": "{{baseUrl}}/actuator/health", "host": ["{{baseUrl}}"], "path": ["actuator", "health"] }
-      },
-      "event": [
+      "item": [
         {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "pm.test('status is 200', () => pm.response.to.have.status(200));",
-              "pm.test('app is UP', () => pm.expect(pm.response.json().status).to.eql('UP'));"
-            ]
-          }
+          "name": "Health (overall)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/actuator/health", "host": ["{{baseUrl}}"], "path": ["actuator", "health"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('app is UP', () => pm.expect(pm.response.json().status).to.eql('UP'));",
+                  "pm.test('no details are shown', () => pm.expect(pm.response.json().components).to.be.undefined);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Liveness (is the app running?)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/actuator/health/liveness", "host": ["{{baseUrl}}"], "path": ["actuator", "health", "liveness"] },
+            "description": "The app alone. It stays UP when the database is down, so an orchestrator does not restart the app for a database problem."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('liveness is UP', () => pm.expect(pm.response.json().status).to.eql('UP'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Readiness (can it take traffic?)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/actuator/health/readiness", "host": ["{{baseUrl}}"], "path": ["actuator", "health", "readiness"] },
+            "description": "Needs the database. It returns 503 when Postgres cannot be reached, so a load balancer stops sending requests."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('readiness is UP', () => pm.expect(pm.response.json().status).to.eql('UP'));"
+                ]
+              }
+            }
+          ]
         }
       ]
     },

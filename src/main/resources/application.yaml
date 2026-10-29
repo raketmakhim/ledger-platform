@@ -3,6 +3,16 @@ ledger:
     # how often a transfer or deposit is run again after losing a clash with another request, and the pause scale
     max-attempts: 8
     backoff-millis: 10
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      group:
+        # liveness is the app alone: a database outage must not make an orchestrator restart it.
+        # readiness is "can take traffic", which needs the database.
+        readiness:
+          include: readinessState,db
 spring:
   application:
     name: ledger-platform
