@@ -78,7 +78,7 @@ The services depend on interfaces, not implementations:
 
 ## Database (`db/migration/V1__init.sql`)
 
-- `account`: id, currency, type, status, balance, version, created at. A `CHECK` stops a customer balance going negative, and a partial unique index allows one `SYSTEM` account per currency.
+- `account`: id, owner id, currency, type, status, balance, version, created at. A customer account has an owner and the bank's own account has none (a `CHECK`), and `owner_id` is indexed. A `CHECK` stops a customer balance going negative, and a partial unique index allows one `SYSTEM` account per currency.
 - `journal_entry`: id, type, reference, created at. `type` is limited to the three entry types, and `(type, reference)` is unique, so a repeated request cannot move money twice. `JpaJournalEntryRepository` flushes on save and turns a violation of that constraint (found by its name) into `DuplicateReferenceException`, a 409 in the API.
 - `posting`: id, entry, account, signed amount, currency. Both foreign keys are indexed.
 - Amounts are `NUMERIC(24,4)` and times are `TIMESTAMPTZ`.
@@ -125,6 +125,14 @@ The mappers are unit-tested. The repositories need a real database, so `JpaRepos
 - **Deadlocks:** `hibernate.order_updates` (in `application.yaml`) sends updates in primary-key order, and a deadlock loser is retried like any other clash.
 - **Tests:** `TransactionBoundaryTest` (integration) covers the wrappers: a deposit that fails halfway changes nothing, a clash is retried in a fresh transaction (one rollback, then one commit), and the retries stop at the configured number. `ConcurrencyTest` (integration) fires many requests at once against Postgres and checks the books: many deposits into one account, overspending and opposite-direction transfers. Removing `@Version` makes it fail.
 - **Limit:** one clearing account per currency is a hot row, so heavy deposit load can run out of retries. See [todo](todo.md).
+
+## API (`accounting/adapter/web`)
+
+- `POST /accounts` (open an empty account in GBP, EUR, USD or JPY), `GET /accounts/{id}`, `GET /accounts` (the caller's own, oldest first), and `POST /transfers`. Health is at `/actuator/health`, with `/liveness` and `/readiness` (readiness includes the database).
+- **Who is calling:** the `X-Customer-Id` header, read in one place (`CallerArgumentResolver`) into a `Caller`. Controllers pass only its id to the services, so real login can replace the header without touching them. Missing or invalid header is a 401. Anyone can fake the header, so this is not security yet.
+- **Ownership:** `AccountService` shows an account only to its owner, and `TransferService` takes money only from the caller's accounts. Anything else is "not found", the same as a missing account, so ids cannot be probed. A transfer's destination can be anyone's.
+- **Errors:** every failure is a `ProblemDetail` with a fixed `urn:ledger:problem:<slug>` type (see `ApiExceptionHandler`).
+- The Postman collection in `docs/postman` covers all of it.
 
 ## Not built yet
 

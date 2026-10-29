@@ -1,12 +1,15 @@
 CREATE TABLE account (
     id          UUID PRIMARY KEY,
+    owner_id    UUID,
     currency    CHAR(3)         NOT NULL,
     type        VARCHAR(20)     NOT NULL CHECK (type IN ('CUSTOMER', 'SYSTEM')),
     status      VARCHAR(20)     NOT NULL CHECK (status IN ('ACTIVE', 'FROZEN', 'CLOSED')),
     balance     NUMERIC(24,4)   NOT NULL DEFAULT 0,
     version     BIGINT          NOT NULL DEFAULT 0,
     created_at  TIMESTAMPTZ     NOT NULL DEFAULT now(),
-    CHECK (type = 'SYSTEM' OR balance >= 0)
+    CHECK (type = 'SYSTEM' OR balance >= 0),
+    -- a customer account has an owner and the bank's own account has none
+    CHECK ((type = 'CUSTOMER') = (owner_id IS NOT NULL))
 );
 
 CREATE TABLE journal_entry (
@@ -28,6 +31,7 @@ CREATE TABLE posting (
 
 CREATE INDEX posting_entry_id_idx   ON posting (entry_id);
 CREATE INDEX posting_account_id_idx ON posting (account_id);
+CREATE INDEX account_owner_id_idx   ON account (owner_id);
 
 -- One clearing account per currency. Customer deposits are funded through these,
 -- so they go negative. Fixed ids because the app looks them up by type and currency.

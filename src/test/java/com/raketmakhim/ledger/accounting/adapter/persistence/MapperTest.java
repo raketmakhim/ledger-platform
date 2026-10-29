@@ -24,26 +24,37 @@ class MapperTest {
     private static final Currency JPY = Currency.getInstance("JPY");
     private static final Instant NOW = Instant.parse("2026-10-15T12:00:00Z");
 
+    private static final UUID OWNER = new UUID(5, 5);
+
     @Test
     void accountSurvivesTheRoundTrip() {
-        Account account = new Account(new UUID(1, 1), GBP, AccountType.CUSTOMER, AccountStatus.FROZEN,
+        Account account = new Account(new UUID(1, 1), OWNER, GBP, AccountType.CUSTOMER, AccountStatus.FROZEN,
                 new Money(new BigDecimal("12.34"), GBP), 7, NOW);
 
         assertThat(AccountMapper.toDomain(AccountMapper.toEntity(account))).isEqualTo(account);
     }
 
     @Test
+    void anAccountWithoutAnOwnerSurvivesTheRoundTrip() {
+        Account clearing = new Account(new UUID(1, 2), null, GBP, AccountType.SYSTEM, AccountStatus.ACTIVE,
+                new Money(new BigDecimal("-5.00"), GBP), 0, NOW);
+
+        assertThat(AccountMapper.toDomain(AccountMapper.toEntity(clearing))).isEqualTo(clearing);
+    }
+
+    @Test
     void accountEntityHoldsTheColumnValues() {
-        Account account = new Account(new UUID(1, 1), GBP, AccountType.SYSTEM, AccountStatus.ACTIVE,
-                new Money(new BigDecimal("-5.00"), GBP), 3, NOW);
+        Account account = new Account(new UUID(1, 1), OWNER, GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE,
+                new Money(new BigDecimal("5.00"), GBP), 3, NOW);
 
         AccountEntity entity = AccountMapper.toEntity(account);
 
+        assertThat(entity.getOwnerId()).isEqualTo(OWNER);
         assertThat(entity.getId()).isEqualTo(account.id());
         assertThat(entity.getCurrency()).isEqualTo("GBP");
-        assertThat(entity.getType()).isEqualTo(AccountType.SYSTEM);
+        assertThat(entity.getType()).isEqualTo(AccountType.CUSTOMER);
         assertThat(entity.getStatus()).isEqualTo(AccountStatus.ACTIVE);
-        assertThat(entity.getBalance()).isEqualByComparingTo("-5");
+        assertThat(entity.getBalance()).isEqualByComparingTo("5");
         assertThat(entity.getVersion()).isEqualTo(3);
         assertThat(entity.getCreatedAt()).isEqualTo(NOW);
     }
@@ -51,7 +62,7 @@ class MapperTest {
     @Test
     void balanceReadFromFourDecimalPlacesGetsTheCurrencyScale() {
         // Postgres returns NUMERIC(24,4), so 5 yen comes back as 5.0000
-        AccountEntity row = new AccountEntity(new UUID(1, 1), "JPY", AccountType.CUSTOMER, AccountStatus.ACTIVE,
+        AccountEntity row = new AccountEntity(new UUID(1, 1), OWNER, "JPY", AccountType.CUSTOMER, AccountStatus.ACTIVE,
                 new BigDecimal("5.0000"), 0, NOW);
 
         assertThat(AccountMapper.toDomain(row).balance()).isEqualTo(new Money(new BigDecimal("5"), JPY));

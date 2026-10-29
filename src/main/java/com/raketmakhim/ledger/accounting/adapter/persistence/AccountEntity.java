@@ -27,6 +27,10 @@ class AccountEntity {
     @Id
     private UUID id;
 
+    // null for the bank's own accounts
+    @Column(name = "owner_id")
+    private UUID ownerId;
+
     @JdbcTypeCode(SqlTypes.CHAR)
     @Column(nullable = false, length = 3)
     private String currency;
@@ -53,9 +57,10 @@ class AccountEntity {
     protected AccountEntity() {
     }
 
-    AccountEntity(UUID id, String currency, AccountType type, AccountStatus status, BigDecimal balance,
+    AccountEntity(UUID id, UUID ownerId, String currency, AccountType type, AccountStatus status, BigDecimal balance,
                   long version, Instant createdAt) {
         this.id = id;
+        this.ownerId = ownerId;
         this.currency = currency;
         this.type = type;
         this.status = status;
@@ -65,6 +70,7 @@ class AccountEntity {
     }
 
     UUID getId() { return id; }
+    UUID getOwnerId() { return ownerId; }
     String getCurrency() { return currency; }
     AccountType getType() { return type; }
     AccountStatus getStatus() { return status; }

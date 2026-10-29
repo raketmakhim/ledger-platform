@@ -37,6 +37,7 @@ class DepositServiceTest {
 
     private static final UUID CUSTOMER_ID = new UUID(1, 1);
     private static final UUID CLEARING_ID = new UUID(1, 2);
+    private static final UUID OWNER = new UUID(7, 1);
 
     private final Map<UUID, Account> accounts = new HashMap<>();
     private final List<JournalEntry> savedEntries = new ArrayList<>();
@@ -46,6 +47,10 @@ class DepositServiceTest {
     @BeforeEach
     void setUp() {
         AccountRepository accountRepository = new AccountRepository() {
+            public List<Account> findByOwner(UUID ownerId) {
+                return List.of();
+            }
+
             public Optional<Account> findById(UUID id) {
                 return Optional.ofNullable(accounts.get(id));
             }
@@ -69,7 +74,8 @@ class DepositServiceTest {
     }
 
     private void add(UUID id, Currency currency, AccountType type, AccountStatus status) {
-        accounts.put(id, new Account(id, currency, type, status, new Money(BigDecimal.ZERO, currency), 0, NOW));
+        UUID owner = type == AccountType.CUSTOMER ? OWNER : null;
+        accounts.put(id, new Account(id, owner, currency, type, status, new Money(BigDecimal.ZERO, currency), 0, NOW));
     }
 
     private static Money gbp(String amount) {

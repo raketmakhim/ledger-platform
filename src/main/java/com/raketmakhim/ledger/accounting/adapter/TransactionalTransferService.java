@@ -20,7 +20,7 @@ public class TransactionalTransferService extends TransferService {
 
     @Override
     @RetriedTransaction
-    public JournalEntry transfer(UUID fromId, UUID toId, Money amount, String reference) {
-        return super.transfer(fromId, toId, amount, reference);
+    public JournalEntry transfer(UUID callerId, UUID fromId, UUID toId, Money amount, String reference) {
+        return super.transfer(callerId, fromId, toId, amount, reference);
     }
 }

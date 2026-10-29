@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -36,6 +37,7 @@ class JpaRepositoriesTest {
 
     private static final Currency GBP = Currency.getInstance("GBP");
     private static final Instant NOW = Instant.parse("2026-10-15T12:00:00Z");
+    private static final UUID OWNER = new UUID(7, 7);
 
     @Autowired
     JpaAccountRepository accounts;
@@ -50,7 +52,11 @@ class JpaRepositoriesTest {
     IdGenerator ids;
 
     private Account newCustomer(String balance) {
-        return new Account(ids.newId(), GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE,
+        return newCustomer(OWNER, balance);
+    }
+
+    private Account newCustomer(UUID owner, String balance) {
+        return new Account(ids.newId(), owner, GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE,
                 new Money(new BigDecimal(balance), GBP), 0, NOW);
     }
 
@@ -133,6 +139,48 @@ class JpaRepositoriesTest {
         assertThat((BigDecimal) postings.get(0).get("amount")).isEqualByComparingTo("-40");
         assertThat(postings.get(1)).containsEntry("account_id", to.id());
         assertThat((BigDecimal) postings.get(1).get("amount")).isEqualByComparingTo("40");
+    }
+
+    @Test
+    void findsAnOwnersAccountsOldestFirstAndNoOneElses() {
+        UUID owner = ids.newId();
+        Account first = newCustomer(owner, "1");
+        Account second = newCustomer(owner, "2");
+        Account someoneElses = newCustomer(ids.newId(), "3");
+        accounts.save(first);
+        accounts.save(second);
+        accounts.save(someoneElses);
+
+        assertThat(accounts.findByOwner(owner)).containsExactly(first, second);
+        assertThat(accounts.findByOwner(ids.newId())).isEmpty();
+    }
+
+    @Test
+    void savesTheOwnerOfAnAccount() {
+        Account account = newCustomer("5");
+        accounts.save(account);
+
+        assertThat(accounts.findById(account.id()).orElseThrow().ownerId()).isEqualTo(OWNER);
+    }
+
+    @Test
+    void theBanksClearingAccountsHaveNoOwner() {
+        assertThat(accounts.findClearingAccount(GBP).orElseThrow().ownerId()).isNull();
+    }
+
+    @Test
+    void theDatabaseRefusesACustomerAccountWithoutAnOwner() {
+        assertThatThrownBy(() -> jdbc.update(
+                "INSERT INTO account (id, currency, type, status) VALUES (?, 'GBP', 'CUSTOMER', 'ACTIVE')", ids.newId()))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void theDatabaseRefusesABankAccountWithAnOwner() {
+        assertThatThrownBy(() -> jdbc.update(
+                "INSERT INTO account (id, owner_id, currency, type, status) VALUES (?, ?, 'CHF', 'SYSTEM', 'ACTIVE')",
+                ids.newId(), OWNER))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     private JournalEntry entry(EntryType type, String reference, Account from, Account to) {

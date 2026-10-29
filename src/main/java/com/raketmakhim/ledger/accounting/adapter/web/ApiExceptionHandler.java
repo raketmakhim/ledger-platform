@@ -4,6 +4,7 @@ import java.net.URI;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.TypeMismatchException;
 import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -95,21 +96,37 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
                 "Something went wrong. Try again later.");
     }
 
+    // The message is fixed: it tells the caller what to send without echoing anything they sent.
+    @ExceptionHandler(UnauthenticatedException.class)
+    ProblemDetail unauthenticated(UnauthenticatedException e) {
+        return problem(HttpStatus.UNAUTHORIZED, "unauthenticated", "Unauthenticated", e.getMessage());
+    }
+
     @Override
     protected ResponseEntity<Object> handleMethodArgumentNotValid(MethodArgumentNotValidException e, HttpHeaders headers,
                                                                   HttpStatusCode status, WebRequest request) {
-        return invalidShape(e, headers, status, request);
+        return invalidRequest(e, BODY_PROBLEM, headers, status, request);
     }
 
     @Override
     protected ResponseEntity<Object> handleHttpMessageNotReadable(HttpMessageNotReadableException e, HttpHeaders headers,
                                                                   HttpStatusCode status, WebRequest request) {
-        return invalidShape(e, headers, status, request);
+        return invalidRequest(e, BODY_PROBLEM, headers, status, request);
     }
 
-    private ResponseEntity<Object> invalidShape(Exception e, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
-        ProblemDetail problem = problem(HttpStatus.BAD_REQUEST, "invalid-request", "Invalid request",
-                "The body must be JSON with from, to, amount, currency and reference.");
+    // for example an id in the URL that is not a UUID
+    @Override
+    protected ResponseEntity<Object> handleTypeMismatch(TypeMismatchException e, HttpHeaders headers,
+                                                        HttpStatusCode status, WebRequest request) {
+        return invalidRequest(e, "A value in the URL is not in the expected format.", headers, status, request);
+    }
+
+    private static final String BODY_PROBLEM =
+            "The body must be JSON, and every field must be present and in the right format.";
+
+    private ResponseEntity<Object> invalidRequest(Exception e, String detail, HttpHeaders headers, HttpStatusCode status,
+                                                  WebRequest request) {
+        ProblemDetail problem = problem(HttpStatus.BAD_REQUEST, "invalid-request", "Invalid request", detail);
         return handleExceptionInternal(e, problem, headers, status, request);
     }
 }

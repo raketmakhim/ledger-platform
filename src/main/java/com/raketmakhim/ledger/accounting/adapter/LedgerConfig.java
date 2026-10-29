@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.retry.annotation.EnableRetry;
 
 import com.raketmakhim.ledger.accounting.application.AccountRepository;
+import com.raketmakhim.ledger.accounting.application.AccountService;
 import com.raketmakhim.ledger.accounting.application.DepositService;
 import com.raketmakhim.ledger.accounting.application.IdGenerator;
 import com.raketmakhim.ledger.accounting.application.JournalEntryRepository;
@@ -25,6 +26,12 @@ class LedgerConfig {
     @Bean
     Clock clock() {
         return Clock.systemUTC();
+    }
+
+    // one save, which has its own transaction, so no wrapper is needed
+    @Bean
+    AccountService accountService(AccountRepository accounts, IdGenerator ids, Clock clock) {
+        return new AccountService(accounts, ids, clock);
     }
 
     @Bean

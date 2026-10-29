@@ -37,6 +37,8 @@ import com.raketmakhim.ledger.accounting.domain.money.Money;
 class TransferEndpointTest {
 
     private static final Currency GBP = Currency.getInstance("GBP");
+    // every account in these tests belongs to this customer, who is also the caller
+    private static final UUID OWNER = new UUID(7, 7);
 
     @Autowired
     MockMvc mvc;
@@ -52,7 +54,7 @@ class TransferEndpointTest {
 
     private UUID newCustomer(String balance) {
         UUID id = ids.newId();
-        accounts.save(new Account(id, GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE, gbp(balance), 0, Instant.now()));
+        accounts.save(new Account(id, OWNER, GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE, gbp(balance), 0, Instant.now()));
         return id;
     }
 
@@ -68,11 +70,44 @@ class TransferEndpointTest {
         return jdbc.queryForObject("SELECT count(*) FROM journal_entry WHERE reference = ?", Integer.class, reference);
     }
 
-    private ResultActions transfer(UUID from, UUID to, String amount, String reference)
-            throws Exception {
+    private ResultActions transfer(UUID from, UUID to, String amount, String reference) throws Exception {
+        return transferAs(OWNER, from, to, amount, reference);
+    }
+
+    private ResultActions transferAs(UUID caller, UUID from, UUID to, String amount, String reference) throws Exception {
         String json = "{\"from\":\"" + from + "\",\"to\":\"" + to + "\",\"amount\":\"" + amount
                 + "\",\"currency\":\"GBP\",\"reference\":\"" + reference + "\"}";
-        return mvc.perform(post("/transfers").contentType(MediaType.APPLICATION_JSON).content(json));
+        return mvc.perform(post("/transfers").header("X-Customer-Id", caller.toString())
+                .contentType(MediaType.APPLICATION_JSON).content(json));
+    }
+
+    @Test
+    void aTransferOutOfSomeoneElsesAccountReturns404AndMovesNothing() throws Exception {
+        UUID alice = newCustomer("100.00");
+        UUID bob = newCustomer("0.00");
+        UUID stranger = new UUID(7, 8);
+
+        transferAs(stranger, alice, bob, "30.00", "E2E-STRANGER")
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.type").value("urn:ledger:problem:account-not-found"));
+
+        assertThat(balance(alice)).isEqualTo(gbp("100.00"));
+        assertThat(balance(bob)).isEqualTo(gbp("0.00"));
+        assertThat(entryCount("E2E-STRANGER")).isZero();
+    }
+
+    @Test
+    void aTransferWithoutACallerReturns401() throws Exception {
+        UUID alice = newCustomer("100.00");
+        UUID bob = newCustomer("0.00");
+
+        mvc.perform(post("/transfers").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"from\":\"" + alice + "\",\"to\":\"" + bob
+                                + "\",\"amount\":\"1.00\",\"currency\":\"GBP\",\"reference\":\"E2E-NOBODY\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.type").value("urn:ledger:problem:unauthenticated"));
+
+        assertThat(balance(alice)).isEqualTo(gbp("100.00"));
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.raketmakhim.ledger.accounting.application;
 
 import java.util.Currency;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -18,6 +19,9 @@ public interface AccountRepository {
 
     /** The bank's SYSTEM clearing account for a currency. */
     Optional<Account> findClearingAccount(Currency currency);
+
+    /** The accounts that belong to a customer, oldest first. */
+    List<Account> findByOwner(UUID ownerId);
 
     void save(Account account);
 }

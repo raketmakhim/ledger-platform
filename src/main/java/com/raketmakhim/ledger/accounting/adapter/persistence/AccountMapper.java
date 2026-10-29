@@ -12,13 +12,13 @@ final class AccountMapper {
     }
 
     static AccountEntity toEntity(Account account) {
-        return new AccountEntity(account.id(), account.currency().getCurrencyCode(), account.type(), account.status(),
-                account.balance().amount(), account.version(), account.createdAt());
+        return new AccountEntity(account.id(), account.ownerId(), account.currency().getCurrencyCode(), account.type(),
+                account.status(), account.balance().amount(), account.version(), account.createdAt());
     }
 
     static Account toDomain(AccountEntity entity) {
         Currency currency = Currency.getInstance(entity.getCurrency());
-        return new Account(entity.getId(), currency, entity.getType(), entity.getStatus(),
+        return new Account(entity.getId(), entity.getOwnerId(), currency, entity.getType(), entity.getStatus(),
                 new Money(entity.getBalance(), currency), entity.getVersion(), entity.getCreatedAt());
     }
 }

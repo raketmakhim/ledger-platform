@@ -1,6 +1,7 @@
 package com.raketmakhim.ledger.accounting.adapter.persistence;
 
 import java.util.Currency;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -38,6 +39,14 @@ public class JpaAccountRepository implements AccountRepository {
                 .setParameter("type", AccountType.SYSTEM)
                 .setParameter("currency", currency.getCurrencyCode())
                 .getResultList().stream().findFirst().map(AccountMapper::toDomain);
+    }
+
+    @Override
+    public List<Account> findByOwner(UUID ownerId) {
+        return entityManager.createQuery(
+                        "select a from AccountEntity a where a.ownerId = :owner order by a.createdAt, a.id", AccountEntity.class)
+                .setParameter("owner", ownerId)
+                .getResultList().stream().map(AccountMapper::toDomain).toList();
     }
 
     @Override

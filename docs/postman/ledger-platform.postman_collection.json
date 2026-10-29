@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Ledger Platform",
-    "description": "Requests for the endpoints built so far. Start the app (./task up), then load the two demo accounts: see docs/postman/seed-accounts.sql. Health checks, then Transfers split into Happy path and Sad path (the error cases). Each request has tests, so the collection runner shows what passed. The endpoint has no authentication yet.",
+    "description": "Requests for the endpoints built so far. Start the app (./task up), then load the demo accounts: see docs/postman/seed-accounts.sql. Health checks, Accounts and Transfers, each split into a Happy path and a Sad path (the error cases). Every account and transfer request says who is calling in the X-Customer-Id header (the customerId variable), which stands in for a real login. Each request has tests, so the collection runner shows what passed.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -16,6 +16,10 @@
     {
       "key": "toAccountId",
       "value": "22222222-2222-7222-8222-222222222222"
+    },
+    {
+      "key": "customerId",
+      "value": "33333333-3333-7333-8333-333333333333"
     }
   ],
   "item": [
@@ -117,6 +121,321 @@
       ]
     },
     {
+      "name": "Accounts",
+      "item": [
+        {
+          "name": "Happy path",
+          "item": [
+            {
+              "name": "Open a GBP account (201)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "X-Customer-Id",
+                    "value": "{{customerId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/accounts",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "accounts"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"currency\": \"GBP\"\n}"
+                },
+                "description": "Opens an empty account for the customer in the X-Customer-Id header."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                      "const body = pm.response.json();",
+                      "pm.collectionVariables.set('newAccountId', body.id);",
+                      "pm.test('Location points at the account', () => pm.expect(pm.response.headers.get('Location')).to.eql('/accounts/' + body.id));",
+                      "pm.test('it is empty and active', () => {",
+                      "  pm.expect(body.balance).to.eql('0.00');",
+                      "  pm.expect(body.status).to.eql('ACTIVE');",
+                      "  pm.expect(body.currency).to.eql('GBP');",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "View it (200)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Customer-Id",
+                    "value": "{{customerId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/accounts/{{newAccountId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "accounts",
+                    "{{newAccountId}}"
+                  ]
+                },
+                "description": "Run after 'Open a GBP account': it reads the account that request created."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                      "pm.test('it is the account that was opened', () => pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('newAccountId')));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "List my accounts (200)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Customer-Id",
+                    "value": "{{customerId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/accounts",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "accounts"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                      "pm.test('the list is an array', () => pm.expect(pm.response.json()).to.be.an('array'));",
+                      "pm.test('it holds only my accounts, oldest first', () => {",
+                      "  const ids = pm.response.json().map(a => a.id);",
+                      "  pm.expect(ids).to.include(pm.collectionVariables.get('fromAccountId'));",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Sad path",
+          "item": [
+            {
+              "name": "Currency the bank does not support (422)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "X-Customer-Id",
+                    "value": "{{customerId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/accounts",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "accounts"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"currency\": \"CHF\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('status is 422', () => pm.response.to.have.status(422));",
+                      "pm.test('type is unsupported-currency', () => pm.expect(pm.response.json().type).to.eql('urn:ledger:problem:unsupported-currency'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Not a currency code (400)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "X-Customer-Id",
+                    "value": "{{customerId}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/accounts",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "accounts"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"currency\": \"GB\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('status is 400', () => pm.response.to.have.status(400));",
+                      "pm.test('type is invalid-request', () => pm.expect(pm.response.json().type).to.eql('urn:ledger:problem:invalid-request'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Someone else's account (404)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Customer-Id",
+                    "value": "{{$guid}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/accounts/{{fromAccountId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "accounts",
+                    "{{fromAccountId}}"
+                  ]
+                },
+                "description": "The caller is a new customer, so the demo account looks like it does not exist."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('status is 404', () => pm.response.to.have.status(404));",
+                      "pm.test('type is account-not-found', () => pm.expect(pm.response.json().type).to.eql('urn:ledger:problem:account-not-found'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Id is not a UUID (400)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Customer-Id",
+                    "value": "{{customerId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/accounts/not-a-uuid",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "accounts",
+                    "not-a-uuid"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('status is 400', () => pm.response.to.have.status(400));",
+                      "pm.test('type is invalid-request', () => pm.expect(pm.response.json().type).to.eql('urn:ledger:problem:invalid-request'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "No caller (401)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/accounts",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "accounts"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('status is 401', () => pm.response.to.have.status(401));",
+                      "pm.test('type is unauthenticated', () => pm.expect(pm.response.json().type).to.eql('urn:ledger:problem:unauthenticated'));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "Transfers",
       "item": [
         {
@@ -130,6 +449,10 @@
                   {
                     "key": "Content-Type",
                     "value": "application/json"
+                  },
+                  {
+                    "key": "X-Customer-Id",
+                    "value": "{{customerId}}"
                   }
                 ],
                 "body": {
@@ -177,6 +500,85 @@
           "name": "Sad path",
           "item": [
             {
+              "name": "Out of someone else's account (404)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "X-Customer-Id",
+                    "value": "{{$guid}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transfers",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transfers"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"from\": \"{{fromAccountId}}\",\n  \"to\": \"{{toAccountId}}\",\n  \"amount\": \"1.00\",\n  \"currency\": \"GBP\",\n  \"reference\": \"{{$guid}}\"\n}"
+                },
+                "description": "The caller is a new customer who owns nothing, so the source account looks like it does not exist."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('status is 404', () => pm.response.to.have.status(404));",
+                      "pm.test('type is account-not-found', () => pm.expect(pm.response.json().type).to.eql('urn:ledger:problem:account-not-found'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "No caller (401)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/transfers",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transfers"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"from\": \"{{fromAccountId}}\",\n  \"to\": \"{{toAccountId}}\",\n  \"amount\": \"1.00\",\n  \"currency\": \"GBP\",\n  \"reference\": \"{{$guid}}\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('status is 401', () => pm.response.to.have.status(401));",
+                      "pm.test('type is unauthenticated', () => pm.expect(pm.response.json().type).to.eql('urn:ledger:problem:unauthenticated'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
               "name": "Reuse the same reference (409)",
               "request": {
                 "method": "POST",
@@ -184,6 +586,10 @@
                   {
                     "key": "Content-Type",
                     "value": "application/json"
+                  },
+                  {
+                    "key": "X-Customer-Id",
+                    "value": "{{customerId}}"
                   }
                 ],
                 "body": {
@@ -218,7 +624,7 @@
                       "pm.sendRequest({",
                       "  url: pm.collectionVariables.get('baseUrl') + '/transfers',",
                       "  method: 'POST',",
-                      "  header: { 'Content-Type': 'application/json' },",
+                      "  header: { 'Content-Type': 'application/json', 'X-Customer-Id': pm.collectionVariables.get('customerId') },",
                       "  body: { mode: 'raw', raw: JSON.stringify(first) }",
                       "}, (error, response) => {",
                       "  if (error || response.code !== 201) {",
@@ -249,6 +655,10 @@
                   {
                     "key": "Content-Type",
                     "value": "application/json"
+                  },
+                  {
+                    "key": "X-Customer-Id",
+                    "value": "{{customerId}}"
                   }
                 ],
                 "body": {
@@ -286,6 +696,10 @@
                   {
                     "key": "Content-Type",
                     "value": "application/json"
+                  },
+                  {
+                    "key": "X-Customer-Id",
+                    "value": "{{customerId}}"
                   }
                 ],
                 "body": {
@@ -323,6 +737,10 @@
                   {
                     "key": "Content-Type",
                     "value": "application/json"
+                  },
+                  {
+                    "key": "X-Customer-Id",
+                    "value": "{{customerId}}"
                   }
                 ],
                 "body": {
@@ -360,6 +778,10 @@
                   {
                     "key": "Content-Type",
                     "value": "application/json"
+                  },
+                  {
+                    "key": "X-Customer-Id",
+                    "value": "{{customerId}}"
                   }
                 ],
                 "body": {
@@ -397,6 +819,10 @@
                   {
                     "key": "Content-Type",
                     "value": "application/json"
+                  },
+                  {
+                    "key": "X-Customer-Id",
+                    "value": "{{customerId}}"
                   }
                 ],
                 "body": {
@@ -434,6 +860,10 @@
                   {
                     "key": "Content-Type",
                     "value": "application/json"
+                  },
+                  {
+                    "key": "X-Customer-Id",
+                    "value": "{{customerId}}"
                   }
                 ],
                 "body": {
@@ -471,6 +901,10 @@
                   {
                     "key": "Content-Type",
                     "value": "application/json"
+                  },
+                  {
+                    "key": "X-Customer-Id",
+                    "value": "{{customerId}}"
                   }
                 ],
                 "body": {

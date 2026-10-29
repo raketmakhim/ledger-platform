@@ -64,7 +64,7 @@ Health endpoints (no details are shown):
 
 ## Trying the API
 
-There is no endpoint to create accounts yet, so load two demo accounts first (safe to run again, it resets the balances):
+Accounts and transfers need to know who is calling, so every request sends an `X-Customer-Id: <uuid>` header (the Postman collection does this with its `customerId` variable). Accounts opened through `POST /accounts` start at zero and there is no deposit endpoint yet, so load two funded demo accounts for that customer first (safe to run again, it resets the balances):
 
 ```bash
 ./task up        # in one terminal: Postgres and the app

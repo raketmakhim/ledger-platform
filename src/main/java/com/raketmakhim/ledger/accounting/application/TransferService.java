@@ -6,13 +6,14 @@ import java.util.UUID;
 
 import com.raketmakhim.ledger.accounting.domain.Require;
 import com.raketmakhim.ledger.accounting.domain.account.Account;
+import com.raketmakhim.ledger.accounting.domain.account.AccountNotFoundException;
 import com.raketmakhim.ledger.accounting.domain.journal.EntryType;
 import com.raketmakhim.ledger.accounting.domain.journal.JournalEntry;
 import com.raketmakhim.ledger.accounting.domain.journal.Posting;
 import com.raketmakhim.ledger.accounting.domain.money.Money;
 
 /**
- * Moves money from one customer account to another.
+ * Moves money from one of the caller's customer accounts to any other customer account.
  * Both accounts are updated and everything is saved only after every rule has passed.
  * It must run in one transaction, which is run again if another request changes the same accounts:
  * the adapter package wraps it for that (TransactionalTransferService). It reads the accounts itself,
@@ -32,16 +33,24 @@ public class TransferService {
         this.clock = clock;
     }
 
-    public JournalEntry transfer(UUID fromId, UUID toId, Money amount, String reference){
+    /**
+     * The source account must belong to the caller. If it does not (or does not exist, or is the bank's own),
+     * it is reported as not found, so a caller cannot tell which ids exist.
+     */
+    public JournalEntry transfer(UUID callerId, UUID fromId, UUID toId, Money amount, String reference){
         Checks.positiveAmount(amount, "Transfer");
+        Require.notNull(callerId, "CallerId");
         Require.notNull(fromId, "FromId");
         Require.notNull(toId, "ToId");
         if (fromId.equals(toId)){
             throw new IllegalArgumentException("Cannot transfer to the same account.");
         }
         Account from = accounts.getById(fromId);
+        // only customer accounts have an owner, so owning the source also makes it a customer account
+        if (!callerId.equals(from.ownerId())){
+            throw new AccountNotFoundException(fromId);
+        }
         Account to = accounts.getById(toId);
-        Checks.customerAccount(from, "Transfer");
         Checks.customerAccount(to, "Transfer");
 
         Posting fromPosting = new Posting(ids.newId(), from.id(), amount.negate());

@@ -19,8 +19,8 @@ Found in review. None of these is a bug yet, because nothing is saved anywhere, 
 
 - [ ] **Split `IllegalArgumentException` into specific exceptions** (same account, non-positive amount, non-customer account), so each gets its own problem type. Do it before any client depends on telling them apart. `ApiExceptionHandler` marks the shortcut.
 - [ ] **`Location` header points at nothing:** `POST /transfers` returns `/journal-entries/{id}`, and no such endpoint exists. Build it, or drop the header.
-- [ ] **No authentication or ownership check:** anyone who can reach `POST /transfers` can move money out of any account. Do not expose it publicly until roadmap item 6 is done. Design: scope check in the controller, ownership check in `TransferService` with a caller id passed in, and an `owner` on `Account`.
-- [ ] **Accounts endpoints:** a client cannot create or list accounts yet (`POST /accounts`, `GET /accounts`).
+- [x] **Ownership check and accounts endpoints:** done. `Account` has an `ownerId` (customer accounts require one, the bank's clearing accounts have none; `owner_id` in `V1__init.sql` with a CHECK). `POST /accounts`, `GET /accounts/{id}` and `GET /accounts` work for the caller, and `TransferService` only moves money out of the caller's own accounts. Someone else's account is reported as "not found", the same as a missing one.
+- [ ] **Real authentication:** the caller is whatever the `X-Customer-Id` header says, so anyone can pretend to be anyone. `CallerArgumentResolver` is the one place to swap for a verified token (roadmap item 6, Keycloak). Do not expose the API publicly until then. Later: scope checks (`transfers:write`) in the controllers. No `customer` table: `owner_id` will be the token's subject.
 - [ ] **Deposit endpoint:** `DepositService` is a bean now (`LedgerConfig`), but nothing calls it over HTTP yet.
 - [x] **Mockito warning:** done. The surefire `argLine` in `pom.xml` now loads Mockito as a Java agent at startup (the jar's path comes from `maven-dependency-plugin`), so the "self-attaching" warning is gone and a future JDK will not block it. The empty `argLine` property keeps it working when JaCoCo is skipped.
 

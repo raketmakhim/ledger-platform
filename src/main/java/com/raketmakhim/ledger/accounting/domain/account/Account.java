@@ -9,7 +9,10 @@ import com.raketmakhim.ledger.accounting.domain.journal.Posting;
 import com.raketmakhim.ledger.accounting.domain.money.CurrencyMismatchException;
 import com.raketmakhim.ledger.accounting.domain.money.Money;
 
-public record Account(UUID id, Currency currency, AccountType type, AccountStatus status,
+/**
+ * ownerId is the customer who owns a CUSTOMER account. The bank's own SYSTEM accounts belong to nobody, so it is null.
+ */
+public record Account(UUID id, UUID ownerId, Currency currency, AccountType type, AccountStatus status,
                       Money balance, long version, Instant createdAt) {
 
     public Account {
@@ -21,6 +24,7 @@ public record Account(UUID id, Currency currency, AccountType type, AccountStatu
         Require.notNull(createdAt, "CreatedAt");
         currencyCheck(currency, balance);
         overdraftCheck(type, balance);
+        ownerCheck(type, ownerId);
     }
 
     /**
@@ -44,12 +48,21 @@ public record Account(UUID id, Currency currency, AccountType type, AccountStatu
         if (!type.allowsNegativeBalance() && newBalance.isNegative()){
             throw new InsufficientFundsException(balance, posting.amount());
         }
-        return new Account(id, currency, type, status, newBalance, version, createdAt);
+        return new Account(id, ownerId, currency, type, status, newBalance, version, createdAt);
     }
 
     private static void currencyCheck(Currency currency, Money money){
         if (!currency.equals(money.currency())){
             throw new CurrencyMismatchException(currency, money.currency());
+        }
+    }
+
+    private static void ownerCheck(AccountType type, UUID ownerId){
+        if (type == AccountType.CUSTOMER && ownerId == null){
+            throw new IllegalArgumentException("Invalid account: a customer account needs an owner.");
+        }
+        if (type == AccountType.SYSTEM && ownerId != null){
+            throw new IllegalArgumentException("Invalid account: the bank's own account cannot have an owner.");
         }
     }
 

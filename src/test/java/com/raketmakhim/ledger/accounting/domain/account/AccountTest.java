@@ -28,8 +28,12 @@ class AccountTest {
         return new Money(new BigDecimal(amount), GBP);
     }
 
+    private static final UUID OWNER = new UUID(5, 5);
+
+    // customer accounts belong to someone, the bank's own accounts to nobody
     private static Account account(AccountType type, AccountStatus status, String balance) {
-        return new Account(UUID.randomUUID(), GBP, type, status, gbp(balance), 0, Instant.now());
+        UUID owner = type == AccountType.CUSTOMER ? UUID.randomUUID() : null;
+        return new Account(UUID.randomUUID(), owner, GBP, type, status, gbp(balance), 0, Instant.now());
     }
 
     private static Posting posting(Account account, Money amount) {
@@ -132,12 +136,13 @@ class AccountTest {
         Instant now = Instant.now();
         Money zero = gbp("0");
         return Stream.of(
-                Arguments.of("id", (Executable) () -> new Account(null, GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE, zero, 0, now)),
-                Arguments.of("currency", (Executable) () -> new Account(id, null, AccountType.CUSTOMER, AccountStatus.ACTIVE, zero, 0, now)),
-                Arguments.of("type", (Executable) () -> new Account(id, GBP, null, AccountStatus.ACTIVE, zero, 0, now)),
-                Arguments.of("status", (Executable) () -> new Account(id, GBP, AccountType.CUSTOMER, null, zero, 0, now)),
-                Arguments.of("balance", (Executable) () -> new Account(id, GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE, null, 0, now)),
-                Arguments.of("createdAt", (Executable) () -> new Account(id, GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE, zero, 0, null)));
+                Arguments.of("id", (Executable) () -> new Account(null, OWNER, GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE, zero, 0, now)),
+                Arguments.of("owner of a customer account", (Executable) () -> new Account(id, null, GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE, zero, 0, now)),
+                Arguments.of("currency", (Executable) () -> new Account(id, OWNER, null, AccountType.CUSTOMER, AccountStatus.ACTIVE, zero, 0, now)),
+                Arguments.of("type", (Executable) () -> new Account(id, OWNER, GBP, null, AccountStatus.ACTIVE, zero, 0, now)),
+                Arguments.of("status", (Executable) () -> new Account(id, OWNER, GBP, AccountType.CUSTOMER, null, zero, 0, now)),
+                Arguments.of("balance", (Executable) () -> new Account(id, OWNER, GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE, null, 0, now)),
+                Arguments.of("createdAt", (Executable) () -> new Account(id, OWNER, GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE, zero, 0, null)));
     }
 
     @ParameterizedTest(name = "{0} null is rejected")
@@ -151,11 +156,38 @@ class AccountTest {
         UUID id = UUID.randomUUID();
         Instant now = Instant.now();
 
-        assertThatThrownBy(() -> new Account(null, GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE, gbp("0"), 0, now))
+        assertThatThrownBy(() -> new Account(null, OWNER, GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE, gbp("0"), 0, now))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new Account(id, GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE, new Money(BigDecimal.ZERO, USD), 0, now))
+        assertThatThrownBy(() -> new Account(id, OWNER, GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE, new Money(BigDecimal.ZERO, USD), 0, now))
                 .isInstanceOf(CurrencyMismatchException.class);
-        assertThatThrownBy(() -> new Account(id, GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE, gbp("-1"), 0, now))
+        assertThatThrownBy(() -> new Account(id, OWNER, GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE, gbp("-1"), 0, now))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void aCustomerAccountKeepsItsOwner() {
+        Account account = new Account(UUID.randomUUID(), OWNER, GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE, gbp("0"), 0, Instant.now());
+
+        assertThat(account.ownerId()).isEqualTo(OWNER);
+    }
+
+    @Test
+    void theBanksOwnAccountHasNoOwner() {
+        Account clearing = new Account(UUID.randomUUID(), null, GBP, AccountType.SYSTEM, AccountStatus.ACTIVE, gbp("0"), 0, Instant.now());
+
+        assertThat(clearing.ownerId()).isNull();
+    }
+
+    @Test
+    void aSystemAccountCannotHaveAnOwner() {
+        assertThatThrownBy(() -> new Account(UUID.randomUUID(), OWNER, GBP, AccountType.SYSTEM, AccountStatus.ACTIVE, gbp("0"), 0, Instant.now()))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void applyingAPostingKeepsTheOwner() {
+        Account account = account(AccountType.CUSTOMER, AccountStatus.ACTIVE, "100");
+
+        assertThat(account.applyPosting(posting(account, gbp("5"))).ownerId()).isEqualTo(account.ownerId());
     }
 }

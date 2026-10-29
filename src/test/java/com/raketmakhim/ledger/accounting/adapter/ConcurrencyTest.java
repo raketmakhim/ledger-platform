@@ -48,6 +48,8 @@ import com.raketmakhim.ledger.accounting.domain.money.Money;
 class ConcurrencyTest {
 
     private static final Currency GBP = Currency.getInstance("GBP");
+    // every account in these tests belongs to one customer, who makes every transfer
+    private static final UUID OWNER = new UUID(7, 7);
 
     @Autowired
     JpaAccountRepository accounts;
@@ -66,7 +68,7 @@ class ConcurrencyTest {
 
     private UUID newCustomer(String balance) {
         UUID id = ids.newId();
-        accounts.save(new Account(id, GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE, gbp(balance), 0, Instant.now()));
+        accounts.save(new Account(id, OWNER, GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE, gbp(balance), 0, Instant.now()));
         return id;
     }
 
@@ -144,7 +146,7 @@ class ConcurrencyTest {
         List<Runnable> tasks = new ArrayList<>();
         for (int i = 0; i < 20; i++) {
             String reference = "S-" + i;
-            tasks.add(() -> transfers.transfer(from, to, gbp("10"), reference));
+            tasks.add(() -> transfers.transfer(OWNER, from, to, gbp("10"), reference));
         }
 
         Outcome outcome = runTogether(tasks);
@@ -161,8 +163,8 @@ class ConcurrencyTest {
         List<Runnable> tasks = new ArrayList<>();
         for (int i = 0; i < 20; i++) {
             String reference = "O-" + i;
-            tasks.add(() -> transfers.transfer(a, b, gbp("10"), reference));
-            tasks.add(() -> transfers.transfer(b, a, gbp("5"), reference + "b"));
+            tasks.add(() -> transfers.transfer(OWNER, a, b, gbp("10"), reference));
+            tasks.add(() -> transfers.transfer(OWNER, b, a, gbp("5"), reference + "b"));
         }
 
         Outcome[] outcome = new Outcome[1];
@@ -179,7 +181,7 @@ class ConcurrencyTest {
         UUID to = newCustomer("0");
         List<Runnable> tasks = new ArrayList<>();
         for (int i = 0; i < 10; i++) {
-            tasks.add(() -> transfers.transfer(from, to, gbp("10"), "SAME-REF"));
+            tasks.add(() -> transfers.transfer(OWNER, from, to, gbp("10"), "SAME-REF"));
         }
 
         Outcome outcome = runTogether(tasks);

@@ -112,7 +112,7 @@ class TransactionBoundaryTest {
 
     private UUID newCustomer() {
         UUID id = ids.newId();
-        accounts.save(new Account(id, GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE, gbp("0"), 0, Instant.now()));
+        accounts.save(new Account(id, new UUID(7, 7), GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE, gbp("0"), 0, Instant.now()));
         return id;
     }
 

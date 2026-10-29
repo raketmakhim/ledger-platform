@@ -24,9 +24,10 @@ class TransferController {
     }
 
     @PostMapping("/transfers")
-    ResponseEntity<TransferResponse> transfer(@Valid @RequestBody TransferRequest request) {
+    // the Caller comes first, so a request that does not say who is calling is refused before its body is read
+    ResponseEntity<TransferResponse> transfer(Caller caller, @Valid @RequestBody TransferRequest request) {
         Money amount = new Money(request.amount(), Currency.getInstance(request.currency()));
-        JournalEntry entry = transfers.transfer(request.from(), request.to(), amount, request.reference());
+        JournalEntry entry = transfers.transfer(caller.id(), request.from(), request.to(), amount, request.reference());
         return ResponseEntity.created(URI.create("/journal-entries/" + entry.id())).body(TransferResponse.from(entry));
     }
 }

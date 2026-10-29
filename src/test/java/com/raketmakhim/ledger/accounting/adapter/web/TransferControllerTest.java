@@ -30,6 +30,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import com.raketmakhim.ledger.accounting.application.TransferService;
 import com.raketmakhim.ledger.accounting.domain.account.AccountNotActiveException;
@@ -55,6 +56,7 @@ class TransferControllerTest {
     private static final UUID FROM = new UUID(1, 1);
     private static final UUID TO = new UUID(1, 2);
     private static final UUID ENTRY_ID = new UUID(2, 1);
+    private static final UUID CALLER = new UUID(8, 8);
 
     @Autowired
     MockMvc mvc;
@@ -76,7 +78,7 @@ class TransferControllerTest {
     }
 
     private ResultActions send(String json) throws Exception {
-        return mvc.perform(post("/transfers").contentType(MediaType.APPLICATION_JSON).content(json));
+        return mvc.perform(post("/transfers").header("X-Customer-Id", CALLER.toString()).contentType(MediaType.APPLICATION_JSON).content(json));
     }
 
     private static JournalEntry entry() {
@@ -88,7 +90,7 @@ class TransferControllerTest {
 
     @Test
     void aValidTransferReturns201WithTheEntry() throws Exception {
-        when(transfers.transfer(any(), any(), any(), any())).thenReturn(entry());
+        when(transfers.transfer(any(), any(), any(), any(), any())).thenReturn(entry());
 
         send(validBody())
                 .andExpect(status().isCreated())
@@ -108,11 +110,44 @@ class TransferControllerTest {
 
     @Test
     void theControllerPassesTheRequestOnToTheService() throws Exception {
-        when(transfers.transfer(any(), any(), any(), any())).thenReturn(entry());
+        when(transfers.transfer(any(), any(), any(), any(), any())).thenReturn(entry());
 
         send(validBody());
 
-        verify(transfers).transfer(eq(FROM), eq(TO), eq(gbp("10.00")), eq("rent-oct"));
+        verify(transfers).transfer(eq(CALLER), eq(FROM), eq(TO), eq(gbp("10.00")), eq("rent-oct"));
+    }
+
+    // --- who is calling: the X-Customer-Id header, until real login replaces it ---
+
+    static Stream<Arguments> unidentifiedCallers() {
+        return Stream.of(
+                Arguments.of("no header", null),
+                Arguments.of("empty header", ""),
+                Arguments.of("blank header", "   "),
+                Arguments.of("not a uuid", "alice"));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("unidentifiedCallers")
+    void aRequestFromAnUnidentifiedCallerReturns401(String name, String header) throws Exception {
+        MockHttpServletRequestBuilder request = post("/transfers").contentType(MediaType.APPLICATION_JSON).content(validBody());
+        if (header != null) {
+            request.header("X-Customer-Id", header);
+        }
+
+        mvc.perform(request)
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.type").value(PROBLEM_TYPE + "unauthenticated"))
+                .andExpect(jsonPath("$.status").value(401));
+
+        verifyNoInteractions(transfers);
+    }
+
+    @Test
+    void theCallerIsCheckedBeforeTheBodyIsRead() throws Exception {
+        mvc.perform(post("/transfers").contentType(MediaType.APPLICATION_JSON).content("{"))
+                .andExpect(status().isUnauthorized());
     }
 
     // --- a request that is the wrong shape: 400, and the service is never called ---
@@ -165,7 +200,7 @@ class TransferControllerTest {
     @ParameterizedTest(name = "{2}")
     @MethodSource("serviceFailures")
     void aFailureInTheServiceBecomesAProblemResponse(RuntimeException failure, int status, String slug) throws Exception {
-        when(transfers.transfer(any(), any(), any(), any())).thenThrow(failure);
+        when(transfers.transfer(any(), any(), any(), any(), any())).thenThrow(failure);
 
         send(validBody())
                 .andExpect(status().is(status))
@@ -180,7 +215,7 @@ class TransferControllerTest {
 
     @Test
     void insufficientFundsDoesNotRevealTheBalance() throws Exception {
-        when(transfers.transfer(any(), any(), any(), any()))
+        when(transfers.transfer(any(), any(), any(), any(), any()))
                 .thenThrow(new InsufficientFundsException(gbp("5.00"), gbp("10.00").negate()));
 
         String response = send(validBody()).andReturn().getResponse().getContentAsString();
@@ -190,7 +225,7 @@ class TransferControllerTest {
 
     @Test
     void anUnexpectedFailureDoesNotLeakItsMessage() throws Exception {
-        when(transfers.transfer(any(), any(), any(), any())).thenThrow(new IllegalStateException("db password is hunter2"));
+        when(transfers.transfer(any(), any(), any(), any(), any())).thenThrow(new IllegalStateException("db password is hunter2"));
 
         String response = send(validBody()).andReturn().getResponse().getContentAsString();
 
