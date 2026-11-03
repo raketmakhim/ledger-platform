@@ -41,7 +41,7 @@
 
 ## 3. Idempotency
 
-**Status:** Built for `POST /transfers`. Deposits have no HTTP endpoint yet, so they have no key. Not built: expiring old records (see `todo.md`).
+**Status:** Built for `POST /transfers`, including expiry. Deposits have no HTTP endpoint yet, so they have no key.
 
 **How it works:** the client sends an `Idempotency-Key` header (1 to 64 characters, required). `TransferService` looks up (caller, key) in `idempotency_record`.
 - Same key and same request: the first entry is returned (a 201 with the same body) and no money moves.
@@ -49,6 +49,7 @@
 - New key: the transfer runs. The key is claimed before the accounts and entry are saved, in the same transaction, so a failed transfer stores nothing and a retry runs again.
 - Two requests with one key at the same moment: the second waits on the primary key, then gets a concurrency failure, is retried, and replays the first.
 - Keys belong to the caller, so one caller can never read another's result.
+- A key counts for 24 hours (`ledger.idempotency.window`). After that the record is released and the same key is a new payment. A reused reference is still refused with a 409, so no money moves twice. A scheduled job (`IdempotencyCleanup`, hourly) deletes old records, because Postgres has no row expiry of its own.
 
 **Choices:**
 - The replay is rebuilt from the saved entry, not from a stored response body. The request is compared as a plain text fingerprint, so there is no hash.

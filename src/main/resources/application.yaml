@@ -3,6 +3,10 @@ ledger:
     # how often a transfer or deposit is run again after losing a clash with another request, and the pause scale
     max-attempts: 8
     backoff-millis: 10
+  idempotency:
+    # how long an Idempotency-Key protects a retry. Later the same key is a new payment, and the record is deleted.
+    window: PT24H
+    cleanup-interval: PT1H
 management:
   endpoint:
     health:

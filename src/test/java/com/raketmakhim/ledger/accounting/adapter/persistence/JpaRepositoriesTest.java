@@ -243,7 +243,7 @@ class JpaRepositoriesTest {
     void savesAndFindsTheFirstResultForAKey() {
         UUID caller = ids.newId();
         JournalEntry entry = savedEntry("IDEM-1");
-        keys.save(new IdempotencyRecord(caller, "key-1", "a|b|1.00|GBP|IDEM-1", entry));
+        keys.save(new IdempotencyRecord(caller, "key-1", "a|b|1.00|GBP|IDEM-1", entry, NOW));
 
         IdempotencyRecord found = keys.find(caller, "key-1").orElseThrow();
 
@@ -255,7 +255,7 @@ class JpaRepositoriesTest {
     @Test
     void anUnknownKeyGivesNothingAndKeysBelongToTheCaller() {
         UUID caller = ids.newId();
-        keys.save(new IdempotencyRecord(caller, "key-2", "f", savedEntry("IDEM-2")));
+        keys.save(new IdempotencyRecord(caller, "key-2", "f", savedEntry("IDEM-2"), NOW));
 
         assertThat(keys.find(caller, "other-key")).isEmpty();
         assertThat(keys.find(ids.newId(), "key-2")).isEmpty();
@@ -264,17 +264,92 @@ class JpaRepositoriesTest {
     @Test
     void claimingAKeyThatIsTakenIsAConcurrencyFailureSoTheRequestRunsAgain() {
         UUID caller = ids.newId();
-        keys.save(new IdempotencyRecord(caller, "key-3", "f", savedEntry("IDEM-3")));
-        IdempotencyRecord second = new IdempotencyRecord(caller, "key-3", "f", savedEntry("IDEM-3B"));
+        keys.save(new IdempotencyRecord(caller, "key-3", "f", savedEntry("IDEM-3"), NOW));
+        IdempotencyRecord second = new IdempotencyRecord(caller, "key-3", "f", savedEntry("IDEM-3B"), NOW);
 
         assertThatThrownBy(() -> keys.save(second)).isInstanceOf(ConcurrencyFailureException.class);
     }
 
     @Test
     void twoCallersCanClaimTheSameKey() {
-        keys.save(new IdempotencyRecord(ids.newId(), "shared", "f", savedEntry("IDEM-4")));
-        keys.save(new IdempotencyRecord(ids.newId(), "shared", "f", savedEntry("IDEM-4B")));
+        keys.save(new IdempotencyRecord(ids.newId(), "shared", "f", savedEntry("IDEM-4"), NOW));
+        keys.save(new IdempotencyRecord(ids.newId(), "shared", "f", savedEntry("IDEM-4B"), NOW));
 
         assertThat(count("SELECT count(*) FROM idempotency_record WHERE idempotency_key = ?", "shared")).isEqualTo(2);
+    }
+
+    @Test
+    void theTimeAKeyWasFirstUsedIsSavedAndReadBack() {
+        UUID caller = ids.newId();
+        keys.save(new IdempotencyRecord(caller, "key-5", "f", savedEntry("IDEM-5"), NOW));
+
+        assertThat(keys.find(caller, "key-5").orElseThrow().createdAt()).isEqualTo(NOW);
+    }
+
+    @Test
+    void releasingAKeyFreesItForTheSameCallerAndLeavesTheLedgerAlone() {
+        UUID caller = ids.newId();
+        JournalEntry entry = savedEntry("IDEM-6");
+        keys.save(new IdempotencyRecord(caller, "key-6", "f", entry, NOW));
+
+        keys.release(caller, "key-6");
+
+        assertThat(keys.find(caller, "key-6")).isEmpty();
+        assertThat(count("SELECT count(*) FROM journal_entry WHERE id = ?", entry.id())).isEqualTo(1);
+        keys.save(new IdempotencyRecord(caller, "key-6", "f", savedEntry("IDEM-6B"), NOW));
+    }
+
+    @Test
+    void releasingAKeyThatDoesNotExistIsHarmless() {
+        keys.release(ids.newId(), "never-used");
+    }
+
+    @Test
+    void releasingAKeyDoesNotTouchOtherCallersOrOtherKeys() {
+        UUID caller = ids.newId();
+        UUID other = ids.newId();
+        keys.save(new IdempotencyRecord(caller, "key-7", "f", savedEntry("IDEM-7"), NOW));
+        keys.save(new IdempotencyRecord(caller, "key-7b", "f", savedEntry("IDEM-7B"), NOW));
+        keys.save(new IdempotencyRecord(other, "key-7", "f", savedEntry("IDEM-7C"), NOW));
+
+        keys.release(caller, "key-7");
+
+        assertThat(keys.find(caller, "key-7b")).isPresent();
+        assertThat(keys.find(other, "key-7")).isPresent();
+    }
+
+    @Test
+    void deletingExpiredRecordsRemovesThoseCreatedAtOrBeforeTheCutoffAndKeepsTheRest() {
+        UUID caller = ids.newId();
+        Instant cutoff = NOW;
+        keys.save(new IdempotencyRecord(caller, "old", "f", savedEntry("IDEM-8A"), cutoff.minusSeconds(1)));
+        keys.save(new IdempotencyRecord(caller, "boundary", "f", savedEntry("IDEM-8B"), cutoff));
+        keys.save(new IdempotencyRecord(caller, "fresh", "f", savedEntry("IDEM-8C"), cutoff.plusSeconds(1)));
+
+        int deleted = keys.deleteExpired(cutoff);
+
+        assertThat(deleted).isGreaterThanOrEqualTo(2);
+        assertThat(keys.find(caller, "old")).isEmpty();
+        assertThat(keys.find(caller, "boundary")).isEmpty();
+        assertThat(keys.find(caller, "fresh")).isPresent();
+    }
+
+    @Test
+    void deletingExpiredRecordsNeverDeletesLedgerRows() {
+        UUID caller = ids.newId();
+        JournalEntry entry = savedEntry("IDEM-9");
+        keys.save(new IdempotencyRecord(caller, "ancient", "f", entry, NOW.minusSeconds(86_400)));
+
+        keys.deleteExpired(NOW);
+
+        assertThat(count("SELECT count(*) FROM journal_entry WHERE id = ?", entry.id())).isEqualTo(1);
+        assertThat(count("SELECT count(*) FROM posting WHERE entry_id = ?", entry.id())).isEqualTo(2);
+    }
+
+    @Test
+    void deletingExpiredRecordsTwiceIsHarmless() {
+        keys.deleteExpired(NOW);
+
+        assertThat(keys.deleteExpired(NOW)).isZero();
     }
 }

@@ -1,5 +1,8 @@
 package com.raketmakhim.ledger.accounting.adapter.persistence;
 
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -32,7 +35,8 @@ public class JpaIdempotencyRepository implements IdempotencyRepository {
     @Transactional(readOnly = true)
     public Optional<IdempotencyRecord> find(UUID callerId, String key) {
         List<?> rows = entityManager.createNativeQuery(
-                        "select fingerprint, entry_id from idempotency_record where caller_id = ?1 and idempotency_key = ?2")
+                        "select fingerprint, entry_id, created_at from idempotency_record "
+                                + "where caller_id = ?1 and idempotency_key = ?2")
                 .setParameter(1, callerId)
                 .setParameter(2, key)
                 .getResultList();
@@ -41,7 +45,8 @@ public class JpaIdempotencyRepository implements IdempotencyRepository {
         }
         Object[] columns = (Object[]) rows.get(0);
         JournalEntryEntity entry = entityManager.find(JournalEntryEntity.class, (UUID) columns[1]);
-        return Optional.of(new IdempotencyRecord(callerId, key, (String) columns[0], JournalEntryMapper.toDomain(entry)));
+        return Optional.of(new IdempotencyRecord(callerId, key, (String) columns[0],
+                JournalEntryMapper.toDomain(entry), toInstant(columns[2])));
     }
 
     @Override
@@ -49,12 +54,13 @@ public class JpaIdempotencyRepository implements IdempotencyRepository {
     public void save(IdempotencyRecord record) {
         try {
             entityManager.createNativeQuery(
-                            "insert into idempotency_record (caller_id, idempotency_key, fingerprint, entry_id) "
-                                    + "values (?1, ?2, ?3, ?4)")
+                            "insert into idempotency_record (caller_id, idempotency_key, fingerprint, entry_id, created_at) "
+                                    + "values (?1, ?2, ?3, ?4, ?5)")
                     .setParameter(1, record.callerId())
                     .setParameter(2, record.key())
                     .setParameter(3, record.fingerprint())
                     .setParameter(4, record.entry().id())
+                    .setParameter(5, record.createdAt())
                     .executeUpdate();
         } catch (PersistenceException e) {
             if (Constraints.violated(e, PRIMARY_KEY)) {
@@ -63,5 +69,33 @@ public class JpaIdempotencyRepository implements IdempotencyRepository {
             }
             throw e;
         }
+    }
+
+    @Override
+    @Transactional
+    public void release(UUID callerId, String key) {
+        entityManager.createNativeQuery("delete from idempotency_record where caller_id = ?1 and idempotency_key = ?2")
+                .setParameter(1, callerId)
+                .setParameter(2, key)
+                .executeUpdate();
+    }
+
+    @Override
+    @Transactional
+    public int deleteExpired(Instant cutoff) {
+        return entityManager.createNativeQuery("delete from idempotency_record where created_at <= ?1")
+                .setParameter(1, cutoff)
+                .executeUpdate();
+    }
+
+    // a native query hands back whichever date type the driver chose
+    private static Instant toInstant(Object value) {
+        if (value instanceof Instant instant) {
+            return instant;
+        }
+        if (value instanceof OffsetDateTime time) {
+            return time.toInstant();
+        }
+        return ((Timestamp) value).toInstant();
     }
 }

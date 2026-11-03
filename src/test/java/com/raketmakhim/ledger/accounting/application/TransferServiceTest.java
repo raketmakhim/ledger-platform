@@ -6,7 +6,9 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 
 import java.math.BigDecimal;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Currency;
@@ -54,13 +56,34 @@ class TransferServiceTest {
     private final Map<UUID, Account> accounts = new HashMap<>();
     private final List<JournalEntry> savedEntries = new ArrayList<>();
     private final Map<String, IdempotencyRecord> records = new HashMap<>();
+    // what the key store was asked to do, in order
+    private final List<String> keyCalls = new ArrayList<>();
+    private static final Duration WINDOW = Duration.ofHours(24);
+    private Instant now = NOW;
+    private final Clock clock = new Clock() {
+        public ZoneId getZone() {
+            return ZoneOffset.UTC;
+        }
+
+        public Clock withZone(ZoneId zone) {
+            return this;
+        }
+
+        public Instant instant() {
+            return now;
+        }
+    };
+    private AccountRepository accountRepository;
+    private JournalEntryRepository entryRepository;
+    private IdempotencyRepository keyRepository;
+    private IdGenerator ids;
     private long nextId = 100;
     private int nextKey = 1;
     private TransferService service;
 
     @BeforeEach
     void setUp() {
-        AccountRepository accountRepository = new AccountRepository() {
+        accountRepository = new AccountRepository() {
             public Optional<Account> findById(UUID id) {
                 return Optional.ofNullable(accounts.get(id));
             }
@@ -77,18 +100,28 @@ class TransferServiceTest {
                 accounts.put(account.id(), account);
             }
         };
-        JournalEntryRepository entryRepository = savedEntries::add;
-        IdempotencyRepository keyRepository = new IdempotencyRepository() {
+        entryRepository = savedEntries::add;
+        keyRepository = new IdempotencyRepository() {
             public Optional<IdempotencyRecord> find(UUID callerId, String key) {
                 return Optional.ofNullable(records.get(callerId + "/" + key));
             }
 
             public void save(IdempotencyRecord record) {
+                keyCalls.add("save");
                 records.put(record.callerId() + "/" + record.key(), record);
             }
+
+            public void release(UUID callerId, String key) {
+                keyCalls.add("release");
+                records.remove(callerId + "/" + key);
+            }
+
+            public int deleteExpired(Instant cutoff) {
+                throw new UnsupportedOperationException("not used by the service");
+            }
         };
-        IdGenerator ids = () -> new UUID(2, nextId++);
-        service = new TransferService(accountRepository, entryRepository, keyRepository, ids, Clock.fixed(NOW, ZoneOffset.UTC));
+        ids = () -> new UUID(2, nextId++);
+        service = new TransferService(accountRepository, entryRepository, keyRepository, ids, clock, WINDOW);
 
         add(ALICE, ALICE_OWNER, GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE, "100");
         add(BOB, BOB_OWNER, GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE, "0");
@@ -415,5 +448,102 @@ class TransferServiceTest {
 
         assertThat(records.get(ALICE_OWNER + "/" + KEY).entry()).isEqualTo(retry);
         assertThat(accounts.get(ALICE).balance()).isEqualTo(gbp("50"));
+    }
+
+    // --- expiry: a key only protects retries for a while ---
+
+    @Test
+    void aNewRecordIsStampedWithTheTimeOfTheFirstRequest() {
+        aliceSends(KEY);
+
+        assertThat(records.get(ALICE_OWNER + "/" + KEY).createdAt()).isEqualTo(NOW);
+    }
+
+    @Test
+    void aRetryJustInsideTheWindowIsStillReplayed() {
+        JournalEntry first = aliceSends(KEY);
+        now = NOW.plus(WINDOW).minusSeconds(1);
+
+        assertThat(aliceSends(KEY)).isEqualTo(first);
+        assertThat(savedEntries).containsExactly(first);
+    }
+
+    @Test
+    void aRecordExactlyAsOldAsTheWindowHasExpired() {
+        aliceSends(KEY);
+        now = NOW.plus(WINDOW);
+
+        aliceSends(KEY);
+
+        assertThat(savedEntries).hasSize(2);
+    }
+
+    @Test
+    void afterTheWindowTheSameKeyAndRequestRunsAsANewPayment() {
+        JournalEntry first = aliceSends(KEY);
+        now = NOW.plus(WINDOW).plusSeconds(1);
+
+        JournalEntry second = aliceSends(KEY);
+
+        assertThat(second).isNotEqualTo(first);
+        assertThat(accounts.get(ALICE).balance()).isEqualTo(gbp("20"));
+        assertThat(records.get(ALICE_OWNER + "/" + KEY).entry()).isEqualTo(second);
+        assertThat(records.get(ALICE_OWNER + "/" + KEY).createdAt()).isEqualTo(now);
+    }
+
+    @Test
+    void afterTheWindowTheSameKeyWithADifferentRequestIsAcceptedAsANewPayment() {
+        aliceSends(KEY);
+        now = NOW.plus(WINDOW).plusSeconds(1);
+
+        JournalEntry second = transferWithKey(ALICE_OWNER, KEY, ALICE, BOB, gbp("41"), "T-2");
+
+        assertThat(records.get(ALICE_OWNER + "/" + KEY).entry()).isEqualTo(second);
+        assertThat(accounts.get(ALICE).balance()).isEqualTo(gbp("19"));
+    }
+
+    @Test
+    void anExpiredRecordIsReleasedBeforeTheKeyIsClaimedAgain() {
+        aliceSends(KEY);
+        keyCalls.clear();
+        now = NOW.plus(WINDOW).plusSeconds(1);
+
+        aliceSends(KEY);
+
+        assertThat(keyCalls).containsExactly("release", "save");
+    }
+
+    @Test
+    void aRecordThatIsStillValidIsNeverReleased() {
+        aliceSends(KEY);
+        keyCalls.clear();
+
+        aliceSends(KEY);
+
+        assertThat(keyCalls).isEmpty();
+    }
+
+    @Test
+    void theWindowIsASetting() {
+        TransferService shortWindow = new TransferService(accountRepository, entryRepository, keyRepository, ids,
+                clock, Duration.ofMinutes(30));
+        shortWindow.transfer(new TransferCommand(ALICE_OWNER, KEY, ALICE, BOB, gbp("40"), "T-1"));
+        now = NOW.plus(Duration.ofMinutes(31));
+
+        shortWindow.transfer(new TransferCommand(ALICE_OWNER, KEY, ALICE, BOB, gbp("40"), "T-1"));
+
+        assertThat(savedEntries).hasSize(2);
+    }
+
+    @Test
+    void anExpiredKeyUsedForARequestThatFailsMovesNothing() {
+        aliceSends(KEY);
+        now = NOW.plus(WINDOW).plusSeconds(1);
+
+        assertThatThrownBy(() -> transferWithKey(ALICE_OWNER, KEY, ALICE, BOB, gbp("500"), "T-2"))
+                .isInstanceOf(InsufficientFundsException.class);
+
+        assertThat(savedEntries).hasSize(1);
+        assertThat(accounts.get(ALICE).balance()).isEqualTo(gbp("60"));
     }
 }

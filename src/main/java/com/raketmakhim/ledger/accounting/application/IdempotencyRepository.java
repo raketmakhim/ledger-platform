@@ -1,5 +1,6 @@
 package com.raketmakhim.ledger.accounting.application;
 
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -13,4 +14,10 @@ public interface IdempotencyRepository {
      * so the whole transfer runs again and finds the record.
      */
     void save(IdempotencyRecord record);
+
+    /** Forgets a key, so it can be claimed again. Does nothing if the key is not stored. */
+    void release(UUID callerId, String key);
+
+    /** Deletes every record created at or before the cutoff and returns how many. The ledger is not touched. */
+    int deleteExpired(Instant cutoff);
 }

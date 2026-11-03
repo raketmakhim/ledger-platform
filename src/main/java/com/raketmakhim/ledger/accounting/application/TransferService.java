@@ -1,6 +1,7 @@
 package com.raketmakhim.ledger.accounting.application;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
@@ -29,14 +30,16 @@ public class TransferService {
     private final IdempotencyRepository keys;
     private final IdGenerator ids;
     private final Clock clock;
+    private final Duration keyWindow;
 
     public TransferService(AccountRepository accounts, JournalEntryRepository entries, IdempotencyRepository keys,
-                           IdGenerator ids, Clock clock){
+                           IdGenerator ids, Clock clock, Duration keyWindow){
         this.accounts = accounts;
         this.entries = entries;
         this.keys = keys;
         this.ids = ids;
         this.clock = clock;
+        this.keyWindow = keyWindow;
     }
 
     /**
@@ -62,10 +65,15 @@ public class TransferService {
         }
         Optional<IdempotencyRecord> earlier = keys.find(callerId, command.key());
         if (earlier.isPresent()){
-            if (!earlier.get().fingerprint().equals(command.fingerprint())){
-                throw new IdempotencyKeyReuseException(command.key());
+            if (earlier.get().hasExpired(clock.instant(), keyWindow)){
+                // an old key means nothing now: free it so this request can claim it again
+                keys.release(callerId, command.key());
+            } else {
+                if (!earlier.get().fingerprint().equals(command.fingerprint())){
+                    throw new IdempotencyKeyReuseException(command.key());
+                }
+                return earlier.get().entry();
             }
-            return earlier.get().entry();
         }
         Account from = accounts.getById(fromId);
         // only customer accounts have an owner, so owning the source also makes it a customer account
@@ -86,7 +94,7 @@ public class TransferService {
         Account updatedTo = to.applyPosting(toPosting);
 
         // claim the key first: a request with the same key at the same moment waits here for this one to finish
-        keys.save(new IdempotencyRecord(callerId, command.key(), command.fingerprint(), entry));
+        keys.save(new IdempotencyRecord(callerId, command.key(), command.fingerprint(), entry, entry.createdAt()));
         accounts.save(updatedFrom);
         accounts.save(updatedTo);
         entries.save(entry);

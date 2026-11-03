@@ -1,7 +1,9 @@
 package com.raketmakhim.ledger.accounting.adapter;
 
 import java.time.Clock;
+import java.time.Duration;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import com.raketmakhim.ledger.accounting.application.AccountRepository;
@@ -17,8 +19,9 @@ import com.raketmakhim.ledger.accounting.domain.journal.JournalEntry;
 public class TransactionalTransferService extends TransferService {
 
     public TransactionalTransferService(AccountRepository accounts, JournalEntryRepository entries,
-                                        IdempotencyRepository keys, IdGenerator ids, Clock clock) {
-        super(accounts, entries, keys, ids, clock);
+                                        IdempotencyRepository keys, IdGenerator ids, Clock clock,
+                                        @Value("${ledger.idempotency.window}") Duration keyWindow) {
+        super(accounts, entries, keys, ids, clock, keyWindow);
     }
 
     @Override

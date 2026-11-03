@@ -5,6 +5,7 @@ import java.time.Clock;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.retry.annotation.EnableRetry;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 import com.raketmakhim.ledger.accounting.application.AccountRepository;
 import com.raketmakhim.ledger.accounting.application.AccountService;
@@ -13,6 +14,7 @@ import com.raketmakhim.ledger.accounting.application.IdGenerator;
 /** Creates the beans that can't carry annotations (the JDK clock, and the plain AccountService). */
 @Configuration
 @EnableRetry
+@EnableScheduling
 class LedgerConfig {
 
     @Bean

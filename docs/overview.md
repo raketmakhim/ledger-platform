@@ -67,7 +67,7 @@ Nothing is saved unless every rule passes. The services themselves are plain Jav
 
 `TransferService.transfer(command)` moves money between two customer accounts. The command (`TransferCommand`) holds the caller, an idempotency key, the two accounts, the amount and the reference. It follows the same steps, with no clearing account: reject a bad amount, null ids or the same account on both sides, load both accounts (`AccountNotFoundException` if missing), reject non-customer accounts, build a negative posting for the source and a positive one for the destination, build a `TRANSFER` entry, call `applyPosting` on both (which catches a frozen account, a currency mismatch and insufficient funds), then save. Concurrent transfers are handled by the version check and retry, not by locking (see Concurrency below).
 
-**Idempotency:** the key makes a retry safe. After the input checks, the service looks up (caller, key). A match on the same request returns the first entry and moves nothing, a match on a different request throws `IdempotencyKeyReuseException` (422), and no match runs the transfer. The request is compared as a plain text "fingerprint" of from, to, amount, currency and reference, so no hash is needed. The key is claimed (saved) before the accounts and the entry, so a second request with the same key waits for the first and then replays it. A request that fails stores nothing, so a retry runs again. Keys are 1 to 64 characters and belong to the caller.
+**Idempotency:** the key makes a retry safe. After the input checks, the service looks up (caller, key). A match on the same request returns the first entry and moves nothing, a match on a different request throws `IdempotencyKeyReuseException` (422), and no match runs the transfer. The request is compared as a plain text "fingerprint" of from, to, amount, currency and reference, so no hash is needed. The key is claimed (saved) before the accounts and the entry, so a second request with the same key waits for the first and then replays it. A request that fails stores nothing, so a retry runs again. Keys are 1 to 64 characters and belong to the caller. A key only counts for a while (`ledger.idempotency.window`, 24 hours): `IdempotencyRecord.hasExpired(now, window)` says when, and after that the old record is released and the same key is a new payment (a reused reference is still refused by the database).
 
 Two small helpers keep the services short. `Checks` (application, package-private) holds the rules both services share: the amount must be positive and the account must be a customer account. `Require.notNull` (domain) is the null check used by every domain object. It throws `IllegalArgumentException`, so the API has one exception type to map to a 400.
 
@@ -75,7 +75,7 @@ The services depend on interfaces, not implementations:
 
 - `AccountRepository`: find an account, `getById` (find it or throw `AccountNotFoundException`), find the clearing account for a currency, save.
 - `JournalEntryRepository`: save an entry.
-- `IdempotencyRepository`: find the first result for a caller's key, and claim a key.
+- `IdempotencyRepository`: find the first result for a caller's key, claim a key, release one, and delete the expired ones.
 - `IdGenerator`: make a new id. `adapter/UuidV7IdGenerator` is the real one (UUIDv7, from `java-uuid-generator`).
 - `java.time.Clock`: the current time, so tests can fix it.
 
@@ -84,7 +84,7 @@ The services depend on interfaces, not implementations:
 - `account`: id, owner id, currency, type, status, balance, version, created at. A customer account has an owner and the bank's own account has none (a `CHECK`), and `owner_id` is indexed. A `CHECK` stops a customer balance going negative, and a partial unique index allows one `SYSTEM` account per currency.
 - `journal_entry`: id, type, reference, created at. `type` is limited to the three entry types, and `(type, reference)` is unique, so a repeated request cannot move money twice. `JpaJournalEntryRepository` flushes on save and turns a violation of that constraint (found by its name) into `DuplicateReferenceException`, a 409 in the API.
 - `posting`: id, entry, account, signed amount, currency. Both foreign keys are indexed.
-- `idempotency_record`: caller, key, request fingerprint, entry. The primary key is (caller, key), so two requests with one key cannot both claim it. The entry foreign key is checked at commit, because the key is claimed first. Records are never deleted yet (see [todo](todo.md)).
+- `idempotency_record`: caller, key, request fingerprint, entry. The primary key is (caller, key), so two requests with one key cannot both claim it. `created_at` decides when it expires. The entry foreign key is checked at commit, because the key is claimed first. `IdempotencyCleanup` (adapter) deletes expired records every hour (`ledger.idempotency.cleanup-interval`). It never touches the ledger tables.
 - Amounts are `NUMERIC(24,4)` and times are `TIMESTAMPTZ`.
 - The migration also seeds a clearing account for GBP, EUR, USD and JPY.
 
