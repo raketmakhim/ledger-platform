@@ -32,6 +32,7 @@ import com.raketmakhim.ledger.accounting.domain.account.AccountStatus;
 import com.raketmakhim.ledger.accounting.domain.account.AccountType;
 import com.raketmakhim.ledger.accounting.domain.account.InsufficientFundsException;
 import com.raketmakhim.ledger.accounting.domain.journal.EntryType;
+import com.raketmakhim.ledger.accounting.domain.journal.IdempotencyKeyReuseException;
 import com.raketmakhim.ledger.accounting.domain.journal.JournalEntry;
 import com.raketmakhim.ledger.accounting.domain.money.CurrencyMismatchException;
 import com.raketmakhim.ledger.accounting.domain.money.Money;
@@ -52,7 +53,9 @@ class TransferServiceTest {
 
     private final Map<UUID, Account> accounts = new HashMap<>();
     private final List<JournalEntry> savedEntries = new ArrayList<>();
+    private final Map<String, IdempotencyRecord> records = new HashMap<>();
     private long nextId = 100;
+    private int nextKey = 1;
     private TransferService service;
 
     @BeforeEach
@@ -75,8 +78,17 @@ class TransferServiceTest {
             }
         };
         JournalEntryRepository entryRepository = savedEntries::add;
+        IdempotencyRepository keyRepository = new IdempotencyRepository() {
+            public Optional<IdempotencyRecord> find(UUID callerId, String key) {
+                return Optional.ofNullable(records.get(callerId + "/" + key));
+            }
+
+            public void save(IdempotencyRecord record) {
+                records.put(record.callerId() + "/" + record.key(), record);
+            }
+        };
         IdGenerator ids = () -> new UUID(2, nextId++);
-        service = new TransferService(accountRepository, entryRepository, ids, Clock.fixed(NOW, ZoneOffset.UTC));
+        service = new TransferService(accountRepository, entryRepository, keyRepository, ids, Clock.fixed(NOW, ZoneOffset.UTC));
 
         add(ALICE, ALICE_OWNER, GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE, "100");
         add(BOB, BOB_OWNER, GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE, "0");
@@ -91,7 +103,17 @@ class TransferServiceTest {
         return new Money(new BigDecimal(amount), GBP);
     }
 
+    /** A transfer with a new key each time, so only the tests about keys care what the key is. */
+    private JournalEntry transfer(UUID caller, UUID from, UUID to, Money amount, String reference) {
+        return transferWithKey(caller, "key-" + nextKey++, from, to, amount, reference);
+    }
+
+    private JournalEntry transferWithKey(UUID caller, String key, UUID from, UUID to, Money amount, String reference) {
+        return service.transfer(new TransferCommand(caller, key, from, to, amount, reference));
+    }
+
     private void assertNothingChangedOrSaved() {
+        assertThat(records).isEmpty();
         assertThat(savedEntries).isEmpty();
         assertThat(accounts.get(ALICE).balance()).isEqualTo(gbp("100"));
         assertThat(accounts.get(BOB).balance()).isEqualTo(gbp("0"));
@@ -99,7 +121,7 @@ class TransferServiceTest {
 
     @Test
     void transferMovesMoneyBetweenCustomers() {
-        JournalEntry entry = service.transfer(ALICE_OWNER, ALICE, BOB, gbp("40"), "T-1");
+        JournalEntry entry = transfer(ALICE_OWNER, ALICE, BOB, gbp("40"), "T-1");
 
         assertThat(accounts.get(ALICE).balance()).isEqualTo(gbp("60"));
         assertThat(accounts.get(BOB).balance()).isEqualTo(gbp("40"));
@@ -108,7 +130,7 @@ class TransferServiceTest {
 
     @Test
     void transferRecordsATimedTransferEntryWithTwoPostings() {
-        JournalEntry entry = service.transfer(ALICE_OWNER, ALICE, BOB, gbp("40"), "T-1");
+        JournalEntry entry = transfer(ALICE_OWNER, ALICE, BOB, gbp("40"), "T-1");
 
         assertThat(entry.type()).isEqualTo(EntryType.TRANSFER);
         assertThat(entry.reference()).isEqualTo("T-1");
@@ -126,7 +148,7 @@ class TransferServiceTest {
 
     @Test
     void allowsTransferOfTheWholeBalance() {
-        service.transfer(ALICE_OWNER, ALICE, BOB, gbp("100"), "T-1");
+        transfer(ALICE_OWNER, ALICE, BOB, gbp("100"), "T-1");
 
         assertThat(accounts.get(ALICE).balance().isZero()).isTrue();
     }
@@ -138,7 +160,7 @@ class TransferServiceTest {
     @ParameterizedTest
     @MethodSource("badAmounts")
     void rejectsZeroNegativeAndNullAmounts(Money amount) {
-        assertThatThrownBy(() -> service.transfer(ALICE_OWNER, ALICE, BOB, amount, "r")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> transfer(ALICE_OWNER, ALICE, BOB, amount, "r")).isInstanceOf(IllegalArgumentException.class);
         assertNothingChangedOrSaved();
     }
 
@@ -153,13 +175,13 @@ class TransferServiceTest {
     @ParameterizedTest
     @MethodSource("badAccountPairs")
     void rejectsNullSameAndSystemAccounts(UUID from, UUID to) {
-        assertThatThrownBy(() -> service.transfer(ALICE_OWNER, from, to, gbp("10"), "r")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> transfer(ALICE_OWNER, from, to, gbp("10"), "r")).isInstanceOf(IllegalArgumentException.class);
         assertNothingChangedOrSaved();
     }
 
     @Test
     void rejectsAMissingCaller() {
-        assertThatThrownBy(() -> service.transfer(null, ALICE, BOB, gbp("10"), "r")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> transfer(null, ALICE, BOB, gbp("10"), "r")).isInstanceOf(IllegalArgumentException.class);
         assertNothingChangedOrSaved();
     }
 
@@ -167,7 +189,7 @@ class TransferServiceTest {
 
     @Test
     void rejectsTransferOutOfAnAccountTheCallerDoesNotOwn() {
-        assertThatThrownBy(() -> service.transfer(BOB_OWNER, ALICE, BOB, gbp("10"), "r"))
+        assertThatThrownBy(() -> transfer(BOB_OWNER, ALICE, BOB, gbp("10"), "r"))
                 .isInstanceOfSatisfying(AccountNotFoundException.class,
                         e -> assertThat(e.accountId()).isEqualTo(ALICE));
         assertNothingChangedOrSaved();
@@ -178,9 +200,9 @@ class TransferServiceTest {
         UUID missing = new UUID(9, 9);
 
         Throwable notOwned = catchThrowable(
-                () -> service.transfer(BOB_OWNER, ALICE, BOB, gbp("10"), "r"));
+                () -> transfer(BOB_OWNER, ALICE, BOB, gbp("10"), "r"));
         Throwable doesNotExist = catchThrowable(
-                () -> service.transfer(BOB_OWNER, missing, BOB, gbp("10"), "r"));
+                () -> transfer(BOB_OWNER, missing, BOB, gbp("10"), "r"));
 
         assertThat(notOwned).isInstanceOf(AccountNotFoundException.class);
         assertThat(doesNotExist).isInstanceOf(AccountNotFoundException.class);
@@ -189,21 +211,21 @@ class TransferServiceTest {
 
     @Test
     void rejectsTransferOutOfTheBanksOwnAccount() {
-        assertThatThrownBy(() -> service.transfer(ALICE_OWNER, CLEARING, BOB, gbp("10"), "r"))
+        assertThatThrownBy(() -> transfer(ALICE_OWNER, CLEARING, BOB, gbp("10"), "r"))
                 .isInstanceOf(AccountNotFoundException.class);
         assertNothingChangedOrSaved();
     }
 
     @Test
     void reportsTheSourceFirstWhenTheCallerDoesNotOwnItAndTheDestinationIsMissing() {
-        assertThatThrownBy(() -> service.transfer(BOB_OWNER, ALICE, new UUID(9, 9), gbp("10"), "r"))
+        assertThatThrownBy(() -> transfer(BOB_OWNER, ALICE, new UUID(9, 9), gbp("10"), "r"))
                 .isInstanceOfSatisfying(AccountNotFoundException.class,
                         e -> assertThat(e.accountId()).isEqualTo(ALICE));
     }
 
     @Test
     void theDestinationMayBelongToAnyone() {
-        service.transfer(ALICE_OWNER, ALICE, BOB, gbp("10"), "T-1");
+        transfer(ALICE_OWNER, ALICE, BOB, gbp("10"), "T-1");
 
         assertThat(accounts.get(BOB).ownerId()).isEqualTo(BOB_OWNER);
         assertThat(accounts.get(BOB).balance()).isEqualTo(gbp("10"));
@@ -217,7 +239,7 @@ class TransferServiceTest {
         Account account = accounts.get(frozen);
         add(frozen, account.ownerId(), GBP, AccountType.CUSTOMER, AccountStatus.FROZEN, account.balance().amount().toPlainString());
 
-        assertThatThrownBy(() -> service.transfer(ALICE_OWNER, ALICE, BOB, gbp("10"), "r")).isInstanceOf(AccountNotActiveException.class);
+        assertThatThrownBy(() -> transfer(ALICE_OWNER, ALICE, BOB, gbp("10"), "r")).isInstanceOf(AccountNotActiveException.class);
         assertNothingChangedOrSaved();
     }
 
@@ -229,7 +251,7 @@ class TransferServiceTest {
     @NullAndEmptySource
     @ValueSource(strings = {" ", "   "})
     void rejectsNullAndBlankReferenceAndSavesNothing(String reference) {
-        assertThatThrownBy(() -> service.transfer(ALICE_OWNER, ALICE, BOB, gbp("10"), reference)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> transfer(ALICE_OWNER, ALICE, BOB, gbp("10"), reference)).isInstanceOf(IllegalArgumentException.class);
         assertNothingChangedOrSaved();
     }
 
@@ -237,17 +259,17 @@ class TransferServiceTest {
     void rejectsMissingSourceAndDestination() {
         UUID missing = new UUID(9, 9);
 
-        assertThatThrownBy(() -> service.transfer(ALICE_OWNER, missing, BOB, gbp("10"), "r"))
+        assertThatThrownBy(() -> transfer(ALICE_OWNER, missing, BOB, gbp("10"), "r"))
                 .isInstanceOfSatisfying(AccountNotFoundException.class,
                         e -> assertThat(e.accountId()).isEqualTo(missing));
-        assertThatThrownBy(() -> service.transfer(ALICE_OWNER, ALICE, missing, gbp("10"), "r"))
+        assertThatThrownBy(() -> transfer(ALICE_OWNER, ALICE, missing, gbp("10"), "r"))
                 .isInstanceOf(AccountNotFoundException.class);
         assertNothingChangedOrSaved();
     }
 
     @Test
     void rejectsInsufficientFundsAndSavesNothing() {
-        assertThatThrownBy(() -> service.transfer(ALICE_OWNER, ALICE, BOB, gbp("100.01"), "r"))
+        assertThatThrownBy(() -> transfer(ALICE_OWNER, ALICE, BOB, gbp("100.01"), "r"))
                 .isInstanceOf(InsufficientFundsException.class);
         assertNothingChangedOrSaved();
     }
@@ -256,22 +278,142 @@ class TransferServiceTest {
     void transferCreatesNoMoneyAndDestroysNone() {
         Money before = accounts.get(ALICE).balance().plus(accounts.get(BOB).balance());
 
-        service.transfer(ALICE_OWNER, ALICE, BOB, gbp("33.33"), "T-1");
+        transfer(ALICE_OWNER, ALICE, BOB, gbp("33.33"), "T-1");
 
         assertThat(accounts.get(ALICE).balance().plus(accounts.get(BOB).balance())).isEqualTo(before);
     }
 
     @Test
     void rejectsCurrencyThatDoesNotMatchTheAccountsAndSavesNothing() {
-        assertThatThrownBy(() -> service.transfer(ALICE_OWNER, ALICE, BOB, new Money(BigDecimal.TEN, USD), "r"))
+        assertThatThrownBy(() -> transfer(ALICE_OWNER, ALICE, BOB, new Money(BigDecimal.TEN, USD), "r"))
                 .isInstanceOf(CurrencyMismatchException.class);
         assertNothingChangedOrSaved();
     }
 
     @Test
     void rejectsReferenceThatIsTooLongAndSavesNothing() {
-        assertThatThrownBy(() -> service.transfer(ALICE_OWNER, ALICE, BOB, gbp("10"), "a".repeat(37)))
+        assertThatThrownBy(() -> transfer(ALICE_OWNER, ALICE, BOB, gbp("10"), "a".repeat(37)))
                 .isInstanceOf(IllegalArgumentException.class);
         assertNothingChangedOrSaved();
+    }
+
+    // --- idempotency: the same key is the same payment ---
+
+    private static final String KEY = "key-x";
+
+    /** Alice sends 40 to Bob with reference T-1, which is the request these tests start from. */
+    private JournalEntry aliceSends(String key) {
+        return transferWithKey(ALICE_OWNER, key, ALICE, BOB, gbp("40"), "T-1");
+    }
+
+    @Test
+    void aNewKeyMovesTheMoneyOnceAndIsRemembered() {
+        JournalEntry entry = aliceSends(KEY);
+
+        assertThat(accounts.get(ALICE).balance()).isEqualTo(gbp("60"));
+        assertThat(records.get(ALICE_OWNER + "/" + KEY).entry()).isEqualTo(entry);
+    }
+
+    @Test
+    void aRetryWithTheSameKeyAndRequestReturnsTheOriginalEntryAndMovesNoMoney() {
+        JournalEntry first = aliceSends(KEY);
+        JournalEntry retry = aliceSends(KEY);
+
+        assertThat(retry).isEqualTo(first);
+        assertThat(savedEntries).containsExactly(first);
+        assertThat(accounts.get(ALICE).balance()).isEqualTo(gbp("60"));
+        assertThat(accounts.get(BOB).balance()).isEqualTo(gbp("40"));
+    }
+
+    @Test
+    void aRetryStillReturnsTheOriginalEntryWhenTheTransferCouldNotBeMadeNow() {
+        JournalEntry first = transferWithKey(ALICE_OWNER, KEY, ALICE, BOB, gbp("100"), "T-1");
+
+        // Alice has nothing left, so a new transfer of the same size would fail
+        assertThat(transferWithKey(ALICE_OWNER, KEY, ALICE, BOB, gbp("100"), "T-1")).isEqualTo(first);
+    }
+
+    @Test
+    void aNewKeyWithTheSameDetailsIsASecondPayment() {
+        JournalEntry first = transferWithKey(ALICE_OWNER, "key-1", ALICE, BOB, gbp("40"), "T-1");
+        JournalEntry second = transferWithKey(ALICE_OWNER, "key-2", ALICE, BOB, gbp("40"), "T-2");
+
+        assertThat(second).isNotEqualTo(first);
+        assertThat(accounts.get(ALICE).balance()).isEqualTo(gbp("20"));
+        assertThat(accounts.get(BOB).balance()).isEqualTo(gbp("80"));
+    }
+
+    static Stream<Arguments> changedRequests() {
+        UUID other = new UUID(1, 9);
+        return Stream.of(
+                Arguments.of("amount", ALICE, BOB, gbp("41"), "T-1"),
+                Arguments.of("reference", ALICE, BOB, gbp("40"), "T-2"),
+                Arguments.of("source", other, BOB, gbp("40"), "T-1"),
+                Arguments.of("destination", ALICE, other, gbp("40"), "T-1"),
+                Arguments.of("currency", ALICE, BOB, new Money(new BigDecimal("40"), USD), "T-1"));
+    }
+
+    @ParameterizedTest(name = "a different {0}")
+    @MethodSource("changedRequests")
+    void theSameKeyWithADifferentRequestIsRejectedAndNothingMoves(String what, UUID from, UUID to, Money amount,
+                                                                   String reference) {
+        JournalEntry first = aliceSends(KEY);
+
+        assertThatThrownBy(() -> transferWithKey(ALICE_OWNER, KEY, from, to, amount, reference))
+                .isInstanceOf(IdempotencyKeyReuseException.class);
+        assertThat(savedEntries).containsExactly(first);
+        assertThat(records).hasSize(1);
+        assertThat(accounts.get(ALICE).balance()).isEqualTo(gbp("60"));
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {" ", "   ", "a-key-that-is-longer-than-sixty-four-characters-so-it-is-refused-outright"})
+    void rejectsAMissingBlankOrTooLongKeyAndSavesNothing(String key) {
+        assertThatThrownBy(() -> aliceSends(key)).isInstanceOf(IllegalArgumentException.class);
+        assertNothingChangedOrSaved();
+    }
+
+    @Test
+    void acceptsAKeyOfExactlyTheMaximumLength() {
+        aliceSends("k".repeat(64));
+
+        assertThat(records).hasSize(1);
+    }
+
+    @Test
+    void twoCallersCanUseTheSameKeyWithoutClashing() {
+        add(BOB, BOB_OWNER, GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE, "20");
+        JournalEntry alices = aliceSends(KEY);
+
+        JournalEntry bobs = transferWithKey(BOB_OWNER, KEY, BOB, ALICE, gbp("5"), "T-2");
+
+        assertThat(bobs).isNotEqualTo(alices);
+        assertThat(records).hasSize(2);
+        assertThat(accounts.get(ALICE).balance()).isEqualTo(gbp("65"));
+    }
+
+    @Test
+    void anotherCallerUsingMyKeyNeverGetsMyResult() {
+        JournalEntry alices = aliceSends(KEY);
+
+        // Bob sends exactly Alice's request under Alice's key: it is his own request, and he does not own the source
+        assertThatThrownBy(() -> transferWithKey(BOB_OWNER, KEY, ALICE, BOB, gbp("40"), "T-1"))
+                .isInstanceOf(AccountNotFoundException.class);
+        assertThat(records.get(ALICE_OWNER + "/" + KEY).entry()).isEqualTo(alices);
+        assertThat(records).hasSize(1);
+    }
+
+    @Test
+    void aFailedAttemptStoresNothingSoTheRetryRunsAgain() {
+        assertThatThrownBy(() -> transferWithKey(ALICE_OWNER, KEY, ALICE, BOB, gbp("150"), "T-1"))
+                .isInstanceOf(InsufficientFundsException.class);
+        assertNothingChangedOrSaved();
+        add(ALICE, ALICE_OWNER, GBP, AccountType.CUSTOMER, AccountStatus.ACTIVE, "200");
+
+        JournalEntry retry = transferWithKey(ALICE_OWNER, KEY, ALICE, BOB, gbp("150"), "T-1");
+
+        assertThat(records.get(ALICE_OWNER + "/" + KEY).entry()).isEqualTo(retry);
+        assertThat(accounts.get(ALICE).balance()).isEqualTo(gbp("50"));
     }
 }

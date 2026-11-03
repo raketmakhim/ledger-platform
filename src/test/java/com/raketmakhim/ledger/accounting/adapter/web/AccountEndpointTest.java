@@ -123,6 +123,7 @@ class AccountEndpointTest {
         UUID to = open(caller, "GBP");
 
         MvcResult result = mvc.perform(post("/transfers").header("X-Customer-Id", caller.toString())
+                        .header("Idempotency-Key", UUID.randomUUID().toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"from\":\"" + from + "\",\"to\":\"" + to
                                 + "\",\"amount\":\"1.00\",\"currency\":\"GBP\",\"reference\":\"" + from + "\"}"))

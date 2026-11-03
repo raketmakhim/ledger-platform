@@ -453,11 +453,83 @@
                   {
                     "key": "X-Customer-Id",
                     "value": "{{customerId}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{transferKey}}"
                   }
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"from\": \"{{fromAccountId}}\",\n  \"to\": \"{{toAccountId}}\",\n  \"amount\": \"10.00\",\n  \"currency\": \"GBP\",\n  \"reference\": \"{{$guid}}\"\n}"
+                  "raw": "{\n  \"from\": \"{{fromAccountId}}\",\n  \"to\": \"{{toAccountId}}\",\n  \"amount\": \"10.00\",\n  \"currency\": \"GBP\",\n  \"reference\": \"{{transferReference}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/transfers",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transfers"
+                  ]
+                },
+                "description": "Moves money between the two demo accounts. The reference is a new UUID each time, because it will become the duplicate check."
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.collectionVariables.set('transferKey', pm.variables.replaceIn('{{$guid}}'));",
+                      "pm.collectionVariables.set('transferReference', pm.variables.replaceIn('{{$guid}}'));"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                      "const body = pm.response.json();",
+                      "pm.test('Location points at the entry', () => pm.expect(pm.response.headers.get('Location')).to.eql('/journal-entries/' + body.id));",
+                      "pm.test('it is a TRANSFER with two postings', () => {",
+                      "  pm.expect(body.type).to.eql('TRANSFER');",
+                      "  pm.expect(body.postings.length).to.eql(2);",
+                      "});",
+                      "pm.test('money leaves from and arrives at to', () => {",
+                      "  const out = body.postings.find(p => p.accountId === pm.collectionVariables.get('fromAccountId'));",
+                      "  const into = body.postings.find(p => p.accountId === pm.collectionVariables.get('toAccountId'));",
+                      "  pm.expect(out.amount).to.eql('-10.00');",
+                      "  pm.expect(into.amount).to.eql('10.00');",
+                      "});",
+                      "pm.collectionVariables.set('transferEntryId', body.id);"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Retry the same key (201, same entry, no money moved)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Customer-Id",
+                    "value": "{{customerId}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{transferKey}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"from\": \"{{fromAccountId}}\",\n  \"to\": \"{{toAccountId}}\",\n  \"amount\": \"10.00\",\n  \"currency\": \"GBP\",\n  \"reference\": \"{{transferReference}}\"\n}"
                 },
                 "url": {
                   "raw": "{{baseUrl}}/transfers",
@@ -477,18 +549,7 @@
                     "type": "text/javascript",
                     "exec": [
                       "pm.test('status is 201', () => pm.response.to.have.status(201));",
-                      "const body = pm.response.json();",
-                      "pm.test('Location points at the entry', () => pm.expect(pm.response.headers.get('Location')).to.eql('/journal-entries/' + body.id));",
-                      "pm.test('it is a TRANSFER with two postings', () => {",
-                      "  pm.expect(body.type).to.eql('TRANSFER');",
-                      "  pm.expect(body.postings.length).to.eql(2);",
-                      "});",
-                      "pm.test('money leaves from and arrives at to', () => {",
-                      "  const out = body.postings.find(p => p.accountId === pm.collectionVariables.get('fromAccountId'));",
-                      "  const into = body.postings.find(p => p.accountId === pm.collectionVariables.get('toAccountId'));",
-                      "  pm.expect(out.amount).to.eql('-10.00');",
-                      "  pm.expect(into.amount).to.eql('10.00');",
-                      "});"
+                      "pm.test('it is the first entry again', () => pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('transferEntryId')));"
                     ]
                   }
                 }
@@ -511,6 +572,10 @@
                   {
                     "key": "Content-Type",
                     "value": "application/json"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}"
                   }
                 ],
                 "url": {
@@ -549,6 +614,10 @@
                   {
                     "key": "Content-Type",
                     "value": "application/json"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}"
                   }
                 ],
                 "url": {
@@ -590,6 +659,10 @@
                   {
                     "key": "X-Customer-Id",
                     "value": "{{customerId}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}"
                   }
                 ],
                 "body": {
@@ -624,7 +697,7 @@
                       "pm.sendRequest({",
                       "  url: pm.collectionVariables.get('baseUrl') + '/transfers',",
                       "  method: 'POST',",
-                      "  header: { 'Content-Type': 'application/json', 'X-Customer-Id': pm.collectionVariables.get('customerId') },",
+                      "  header: { 'Content-Type': 'application/json', 'X-Customer-Id': pm.collectionVariables.get('customerId'), 'Idempotency-Key': pm.variables.replaceIn('{{$guid}}') },",
                       "  body: { mode: 'raw', raw: JSON.stringify(first) }",
                       "}, (error, response) => {",
                       "  if (error || response.code !== 201) {",
@@ -648,6 +721,81 @@
               ]
             },
             {
+              "name": "Same key, different request (422)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Customer-Id",
+                    "value": "{{customerId}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{lastKey}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"from\": \"{{fromAccountId}}\",\n  \"to\": \"{{toAccountId}}\",\n  \"amount\": \"2.00\",\n  \"currency\": \"GBP\",\n  \"reference\": \"{{lastKeyReference}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/transfers",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transfers"
+                  ]
+                },
+                "description": "Sends a transfer with a new reference, then this request sends the same reference again. The second one is refused and moves no money."
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const reference = pm.variables.replaceIn('{{$guid}}');",
+                      "const key = pm.variables.replaceIn('{{$guid}}');",
+                      "const first = {",
+                      "  from: pm.collectionVariables.get('fromAccountId'),",
+                      "  to: pm.collectionVariables.get('toAccountId'),",
+                      "  amount: '1.00',",
+                      "  currency: 'GBP',",
+                      "  reference: reference",
+                      "};",
+                      "pm.sendRequest({",
+                      "  url: pm.collectionVariables.get('baseUrl') + '/transfers',",
+                      "  method: 'POST',",
+                      "  header: { 'Content-Type': 'application/json', 'X-Customer-Id': pm.collectionVariables.get('customerId'), 'Idempotency-Key': key },",
+                      "  body: { mode: 'raw', raw: JSON.stringify(first) }",
+                      "}, (error, response) => {",
+                      "  if (error || response.code !== 201) {",
+                      "    throw new Error('The first transfer should return 201, got ' + (error || response.code));",
+                      "  }",
+                      "  pm.collectionVariables.set('lastKey', key);",
+                      "  pm.collectionVariables.set('lastKeyReference', reference);",
+                      "});"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('status is 422', () => pm.response.to.have.status(422));",
+                      "pm.test('type is idempotency-key-reuse', () => pm.expect(pm.response.json().type).to.eql('urn:ledger:problem:idempotency-key-reuse'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
               "name": "Not enough money (422)",
               "request": {
                 "method": "POST",
@@ -659,6 +807,10 @@
                   {
                     "key": "X-Customer-Id",
                     "value": "{{customerId}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}"
                   }
                 ],
                 "body": {
@@ -700,6 +852,10 @@
                   {
                     "key": "X-Customer-Id",
                     "value": "{{customerId}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}"
                   }
                 ],
                 "body": {
@@ -741,6 +897,10 @@
                   {
                     "key": "X-Customer-Id",
                     "value": "{{customerId}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}"
                   }
                 ],
                 "body": {
@@ -782,6 +942,10 @@
                   {
                     "key": "X-Customer-Id",
                     "value": "{{customerId}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}"
                   }
                 ],
                 "body": {
@@ -823,6 +987,10 @@
                   {
                     "key": "X-Customer-Id",
                     "value": "{{customerId}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}"
                   }
                 ],
                 "body": {
@@ -864,6 +1032,10 @@
                   {
                     "key": "X-Customer-Id",
                     "value": "{{customerId}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}"
                   }
                 ],
                 "body": {
@@ -905,11 +1077,56 @@
                   {
                     "key": "X-Customer-Id",
                     "value": "{{customerId}}"
+                  },
+                  {
+                    "key": "Idempotency-Key",
+                    "value": "{{$guid}}"
                   }
                 ],
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"from\": \"{{fromAccountId}}\",\n  \"to\": \"{{toAccountId}}\",\n  \"currency\": \"GBP\",\n  \"reference\": \"{{$guid}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/transfers",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "transfers"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('status is 400', () => pm.response.to.have.status(400));",
+                      "pm.test('type is invalid-request', () => pm.expect(pm.response.json().type).to.eql('urn:ledger:problem:invalid-request'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "No Idempotency-Key (400)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Customer-Id",
+                    "value": "{{customerId}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"from\": \"{{fromAccountId}}\",\n  \"to\": \"{{toAccountId}}\",\n  \"amount\": \"1.00\",\n  \"currency\": \"GBP\",\n  \"reference\": \"{{$guid}}\"\n}"
                 },
                 "url": {
                   "raw": "{{baseUrl}}/transfers",

@@ -9,8 +9,10 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Currency;
 import java.util.List;
+import java.util.Queue;
 import java.util.UUID;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -29,12 +31,14 @@ import com.raketmakhim.ledger.TestcontainersConfiguration;
 import com.raketmakhim.ledger.accounting.adapter.persistence.JpaAccountRepository;
 import com.raketmakhim.ledger.accounting.application.DepositService;
 import com.raketmakhim.ledger.accounting.application.IdGenerator;
+import com.raketmakhim.ledger.accounting.application.TransferCommand;
 import com.raketmakhim.ledger.accounting.application.TransferService;
 import com.raketmakhim.ledger.accounting.domain.account.Account;
 import com.raketmakhim.ledger.accounting.domain.account.AccountStatus;
 import com.raketmakhim.ledger.accounting.domain.account.AccountType;
 import com.raketmakhim.ledger.accounting.domain.account.InsufficientFundsException;
 import com.raketmakhim.ledger.accounting.domain.journal.DuplicateReferenceException;
+import com.raketmakhim.ledger.accounting.domain.journal.JournalEntry;
 import com.raketmakhim.ledger.accounting.domain.money.Money;
 
 /**
@@ -78,6 +82,15 @@ class ConcurrencyTest {
 
     private static Money gbp(String amount) {
         return new Money(new BigDecimal(amount), GBP);
+    }
+
+    /** A transfer under a fresh key, so each call is its own payment. */
+    private JournalEntry send(UUID from, UUID to, Money amount, String reference) {
+        return sendWithKey(ids.newId().toString(), from, to, amount, reference);
+    }
+
+    private JournalEntry sendWithKey(String key, UUID from, UUID to, Money amount, String reference) {
+        return transfers.transfer(new TransferCommand(OWNER, key, from, to, amount, reference));
     }
 
     private record Outcome(int succeeded, int notEnoughMoney, int gaveUp, int duplicates) {
@@ -146,7 +159,7 @@ class ConcurrencyTest {
         List<Runnable> tasks = new ArrayList<>();
         for (int i = 0; i < 20; i++) {
             String reference = "S-" + i;
-            tasks.add(() -> transfers.transfer(OWNER, from, to, gbp("10"), reference));
+            tasks.add(() -> send(from, to, gbp("10"), reference));
         }
 
         Outcome outcome = runTogether(tasks);
@@ -163,8 +176,8 @@ class ConcurrencyTest {
         List<Runnable> tasks = new ArrayList<>();
         for (int i = 0; i < 20; i++) {
             String reference = "O-" + i;
-            tasks.add(() -> transfers.transfer(OWNER, a, b, gbp("10"), reference));
-            tasks.add(() -> transfers.transfer(OWNER, b, a, gbp("5"), reference + "b"));
+            tasks.add(() -> send(a, b, gbp("10"), reference));
+            tasks.add(() -> send(b, a, gbp("5"), reference + "b"));
         }
 
         Outcome[] outcome = new Outcome[1];
@@ -181,7 +194,7 @@ class ConcurrencyTest {
         UUID to = newCustomer("0");
         List<Runnable> tasks = new ArrayList<>();
         for (int i = 0; i < 10; i++) {
-            tasks.add(() -> transfers.transfer(OWNER, from, to, gbp("10"), "SAME-REF"));
+            tasks.add(() -> send(from, to, gbp("10"), "SAME-REF"));
         }
 
         Outcome outcome = runTogether(tasks);
@@ -190,6 +203,26 @@ class ConcurrencyTest {
         assertThat(outcome.succeeded() + outcome.duplicates() + outcome.gaveUp()).isEqualTo(10);
         assertThat(balance(to).amount()).isEqualByComparingTo(BigDecimal.valueOf(10L * outcome.succeeded()));
         assertThat(entryCount("SAME-REF")).isEqualTo(outcome.succeeded());
+    }
+
+    @Test
+    void manyRequestsWithTheSameKeyMoveMoneyOnceAndAllGetTheSameEntry() throws Exception {
+        UUID from = newCustomer("1000");
+        UUID to = newCustomer("0");
+        Queue<UUID> entryIds = new ConcurrentLinkedQueue<>();
+        List<Runnable> tasks = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            tasks.add(() -> entryIds.add(sendWithKey("SAME-KEY", from, to, gbp("10"), "KEY-REF").id()));
+        }
+
+        Outcome outcome = runTogether(tasks);
+
+        // a request may run out of retries, but none may be refused as a duplicate or move money twice
+        assertThat(outcome.succeeded()).isPositive();
+        assertThat(outcome.duplicates()).isZero();
+        assertThat(entryIds).hasSize(outcome.succeeded()).containsOnly(entryIds.peek());
+        assertThat(balance(to).amount()).isEqualByComparingTo("10");
+        assertThat(entryCount("KEY-REF")).isEqualTo(1);
     }
 
     private int entryCount(String referencePattern) {

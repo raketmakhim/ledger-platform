@@ -64,7 +64,7 @@ Health endpoints (no details are shown):
 
 ## Trying the API
 
-Accounts and transfers need to know who is calling, so every request sends an `X-Customer-Id: <uuid>` header (the Postman collection does this with its `customerId` variable). Accounts opened through `POST /accounts` start at zero and there is no deposit endpoint yet, so load two funded demo accounts for that customer first (safe to run again, it resets the balances):
+Accounts and transfers need to know who is calling, so every request sends an `X-Customer-Id: <uuid>` header (the Postman collection does this with its `customerId` variable), and `POST /transfers` also needs an `Idempotency-Key` header. Accounts opened through `POST /accounts` start at zero and there is no deposit endpoint yet, so load two funded demo accounts for that customer first (safe to run again, it resets the balances):
 
 ```bash
 ./task up        # in one terminal: Postgres and the app
@@ -77,7 +77,7 @@ PowerShell does not support `<`, so on Windows use this for the second command:
 Get-Content docs\postman\seed-accounts.sql | docker compose exec -T postgres psql -U ledger -d ledger
 ```
 
-Then import [docs/postman/ledger-platform.postman_collection.json](postman/ledger-platform.postman_collection.json) into Postman and run it. It has the three health checks, then transfers split into a happy path (one successful transfer) and a sad path (the error cases, including a reused reference), each with tests. The two demo account ids are collection variables (`fromAccountId`, `toAccountId`), as is `baseUrl` (`http://localhost:8080`). Each request uses a new UUID as its `reference`.
+Then import [docs/postman/ledger-platform.postman_collection.json](postman/ledger-platform.postman_collection.json) into Postman and run it. It has the three health checks, then transfers split into a happy path (one successful transfer) and a sad path (the error cases, including a reused reference), each with tests. The two demo account ids are collection variables (`fromAccountId`, `toAccountId`), as is `baseUrl` (`http://localhost:8080`). Each request uses a new UUID as its `reference` and its `Idempotency-Key`. The happy path also retries the first transfer with the same key and expects the same entry back, and the sad path includes a reused key with a different amount (422) and a missing key (400).
 
 ## Build
 

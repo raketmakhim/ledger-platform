@@ -2,7 +2,6 @@ package com.raketmakhim.ledger.accounting.adapter.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -32,6 +31,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
+import com.raketmakhim.ledger.accounting.application.TransferCommand;
 import com.raketmakhim.ledger.accounting.application.TransferService;
 import com.raketmakhim.ledger.accounting.domain.account.AccountNotActiveException;
 import com.raketmakhim.ledger.accounting.domain.account.AccountNotFoundException;
@@ -39,6 +39,7 @@ import com.raketmakhim.ledger.accounting.domain.account.AccountStatus;
 import com.raketmakhim.ledger.accounting.domain.account.InsufficientFundsException;
 import com.raketmakhim.ledger.accounting.domain.journal.DuplicateReferenceException;
 import com.raketmakhim.ledger.accounting.domain.journal.EntryType;
+import com.raketmakhim.ledger.accounting.domain.journal.IdempotencyKeyReuseException;
 import com.raketmakhim.ledger.accounting.domain.journal.JournalEntry;
 import com.raketmakhim.ledger.accounting.domain.journal.Posting;
 import com.raketmakhim.ledger.accounting.domain.money.CurrencyMismatchException;
@@ -57,6 +58,7 @@ class TransferControllerTest {
     private static final UUID TO = new UUID(1, 2);
     private static final UUID ENTRY_ID = new UUID(2, 1);
     private static final UUID CALLER = new UUID(8, 8);
+    private static final String KEY = "pay-rent-oct";
 
     @Autowired
     MockMvc mvc;
@@ -78,7 +80,7 @@ class TransferControllerTest {
     }
 
     private ResultActions send(String json) throws Exception {
-        return mvc.perform(post("/transfers").header("X-Customer-Id", CALLER.toString()).contentType(MediaType.APPLICATION_JSON).content(json));
+        return mvc.perform(post("/transfers").header("X-Customer-Id", CALLER.toString()).header("Idempotency-Key", KEY).contentType(MediaType.APPLICATION_JSON).content(json));
     }
 
     private static JournalEntry entry() {
@@ -90,7 +92,7 @@ class TransferControllerTest {
 
     @Test
     void aValidTransferReturns201WithTheEntry() throws Exception {
-        when(transfers.transfer(any(), any(), any(), any(), any())).thenReturn(entry());
+        when(transfers.transfer(any())).thenReturn(entry());
 
         send(validBody())
                 .andExpect(status().isCreated())
@@ -110,11 +112,11 @@ class TransferControllerTest {
 
     @Test
     void theControllerPassesTheRequestOnToTheService() throws Exception {
-        when(transfers.transfer(any(), any(), any(), any(), any())).thenReturn(entry());
+        when(transfers.transfer(any())).thenReturn(entry());
 
         send(validBody());
 
-        verify(transfers).transfer(eq(CALLER), eq(FROM), eq(TO), eq(gbp("10.00")), eq("rent-oct"));
+        verify(transfers).transfer(new TransferCommand(CALLER, KEY, FROM, TO, gbp("10.00"), "rent-oct"));
     }
 
     // --- who is calling: the X-Customer-Id header, until real login replaces it ---
@@ -148,6 +150,16 @@ class TransferControllerTest {
     void theCallerIsCheckedBeforeTheBodyIsRead() throws Exception {
         mvc.perform(post("/transfers").contentType(MediaType.APPLICATION_JSON).content("{"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void aRequestWithoutAnIdempotencyKeyReturns400() throws Exception {
+        mvc.perform(post("/transfers").header("X-Customer-Id", CALLER.toString())
+                        .contentType(MediaType.APPLICATION_JSON).content(validBody()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.type").value(PROBLEM_TYPE + "invalid-request"));
+
+        verifyNoInteractions(transfers);
     }
 
     // --- a request that is the wrong shape: 400, and the service is never called ---
@@ -194,13 +206,14 @@ class TransferControllerTest {
                 Arguments.of(new IllegalArgumentException("Cannot transfer to the same account."), 400, "invalid-request"),
                 Arguments.of(new OptimisticLockingFailureException("clash"), 409, "concurrent-update"),
                 Arguments.of(new DuplicateReferenceException(EntryType.TRANSFER, "rent-oct"), 409, "duplicate-reference"),
+                Arguments.of(new IdempotencyKeyReuseException(KEY), 422, "idempotency-key-reuse"),
                 Arguments.of(new IllegalStateException("db password is hunter2"), 500, "internal-error"));
     }
 
     @ParameterizedTest(name = "{2}")
     @MethodSource("serviceFailures")
     void aFailureInTheServiceBecomesAProblemResponse(RuntimeException failure, int status, String slug) throws Exception {
-        when(transfers.transfer(any(), any(), any(), any(), any())).thenThrow(failure);
+        when(transfers.transfer(any())).thenThrow(failure);
 
         send(validBody())
                 .andExpect(status().is(status))
@@ -215,7 +228,7 @@ class TransferControllerTest {
 
     @Test
     void insufficientFundsDoesNotRevealTheBalance() throws Exception {
-        when(transfers.transfer(any(), any(), any(), any(), any()))
+        when(transfers.transfer(any()))
                 .thenThrow(new InsufficientFundsException(gbp("5.00"), gbp("10.00").negate()));
 
         String response = send(validBody()).andReturn().getResponse().getContentAsString();
@@ -225,7 +238,7 @@ class TransferControllerTest {
 
     @Test
     void anUnexpectedFailureDoesNotLeakItsMessage() throws Exception {
-        when(transfers.transfer(any(), any(), any(), any(), any())).thenThrow(new IllegalStateException("db password is hunter2"));
+        when(transfers.transfer(any())).thenThrow(new IllegalStateException("db password is hunter2"));
 
         String response = send(validBody()).andReturn().getResponse().getContentAsString();
 

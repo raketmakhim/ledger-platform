@@ -15,6 +15,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 
 /** The database row for a journal entry, with its posting rows. Saving the entry saves the postings. */
@@ -35,6 +36,8 @@ class JournalEntryEntity {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    // a stable order, so a replayed entry lists its postings as the first response did (debit first)
+    @OrderBy("amount")
     @OneToMany(cascade = CascadeType.ALL)
     @JoinColumn(name = "entry_id", nullable = false)
     private List<PostingEntity> postings;

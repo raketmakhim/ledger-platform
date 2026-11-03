@@ -15,12 +15,14 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import com.raketmakhim.ledger.TestcontainersConfiguration;
 import com.raketmakhim.ledger.accounting.application.IdGenerator;
+import com.raketmakhim.ledger.accounting.application.IdempotencyRecord;
 import com.raketmakhim.ledger.accounting.domain.account.Account;
 import com.raketmakhim.ledger.accounting.domain.account.AccountStatus;
 import com.raketmakhim.ledger.accounting.domain.account.AccountType;
@@ -44,6 +46,9 @@ class JpaRepositoriesTest {
 
     @Autowired
     JpaJournalEntryRepository entries;
+
+    @Autowired
+    JpaIdempotencyRepository keys;
 
     @Autowired
     JdbcTemplate jdbc;
@@ -220,5 +225,56 @@ class JpaRepositoriesTest {
         entries.save(entry(EntryType.DEPOSIT, "DUP-2", from, to));
 
         assertThat(count("SELECT count(*) FROM journal_entry WHERE reference = ?", "DUP-2")).isEqualTo(2);
+    }
+
+    // --- idempotency records ---
+
+    private JournalEntry savedEntry(String reference) {
+        Account from = newCustomer("100");
+        Account to = newCustomer("0");
+        accounts.save(from);
+        accounts.save(to);
+        JournalEntry entry = entry(EntryType.TRANSFER, reference, from, to);
+        entries.save(entry);
+        return entry;
+    }
+
+    @Test
+    void savesAndFindsTheFirstResultForAKey() {
+        UUID caller = ids.newId();
+        JournalEntry entry = savedEntry("IDEM-1");
+        keys.save(new IdempotencyRecord(caller, "key-1", "a|b|1.00|GBP|IDEM-1", entry));
+
+        IdempotencyRecord found = keys.find(caller, "key-1").orElseThrow();
+
+        assertThat(found.fingerprint()).isEqualTo("a|b|1.00|GBP|IDEM-1");
+        assertThat(found.entry().id()).isEqualTo(entry.id());
+        assertThat(found.entry().postings()).containsExactlyInAnyOrderElementsOf(entry.postings());
+    }
+
+    @Test
+    void anUnknownKeyGivesNothingAndKeysBelongToTheCaller() {
+        UUID caller = ids.newId();
+        keys.save(new IdempotencyRecord(caller, "key-2", "f", savedEntry("IDEM-2")));
+
+        assertThat(keys.find(caller, "other-key")).isEmpty();
+        assertThat(keys.find(ids.newId(), "key-2")).isEmpty();
+    }
+
+    @Test
+    void claimingAKeyThatIsTakenIsAConcurrencyFailureSoTheRequestRunsAgain() {
+        UUID caller = ids.newId();
+        keys.save(new IdempotencyRecord(caller, "key-3", "f", savedEntry("IDEM-3")));
+        IdempotencyRecord second = new IdempotencyRecord(caller, "key-3", "f", savedEntry("IDEM-3B"));
+
+        assertThatThrownBy(() -> keys.save(second)).isInstanceOf(ConcurrencyFailureException.class);
+    }
+
+    @Test
+    void twoCallersCanClaimTheSameKey() {
+        keys.save(new IdempotencyRecord(ids.newId(), "shared", "f", savedEntry("IDEM-4")));
+        keys.save(new IdempotencyRecord(ids.newId(), "shared", "f", savedEntry("IDEM-4B")));
+
+        assertThat(count("SELECT count(*) FROM idempotency_record WHERE idempotency_key = ?", "shared")).isEqualTo(2);
     }
 }

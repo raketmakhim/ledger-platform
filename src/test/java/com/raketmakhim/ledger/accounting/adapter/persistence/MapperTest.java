@@ -87,4 +87,23 @@ class MapperTest {
         assertThat(entity.getPostings().get(0).getCurrency()).isEqualTo("GBP");
         assertThat(entity.getPostings().get(1).getAmount()).isEqualByComparingTo("40");
     }
+
+    @Test
+    void journalEntrySurvivesTheRoundTrip() {
+        Posting debit = new Posting(new UUID(3, 1), new UUID(1, 1), new Money(new BigDecimal("-40"), GBP));
+        Posting credit = new Posting(new UUID(3, 2), new UUID(1, 2), new Money(new BigDecimal("40"), GBP));
+        JournalEntry entry = new JournalEntry(new UUID(2, 1), EntryType.TRANSFER, "T-1", NOW, List.of(debit, credit));
+
+        assertThat(JournalEntryMapper.toDomain(JournalEntryMapper.toEntity(entry))).isEqualTo(entry);
+    }
+
+    @Test
+    void postingAmountsReadFromFourDecimalPlacesGetTheCurrencyScale() {
+        // Postgres returns NUMERIC(24,4), so 5 yen comes back as 5.0000
+        PostingEntity debit = new PostingEntity(new UUID(3, 1), new UUID(1, 1), new BigDecimal("-5.0000"), "JPY");
+        PostingEntity credit = new PostingEntity(new UUID(3, 2), new UUID(1, 2), new BigDecimal("5.0000"), "JPY");
+        JournalEntryEntity row = new JournalEntryEntity(new UUID(2, 1), EntryType.TRANSFER, "T-1", NOW, List.of(debit, credit));
+
+        assertThat(JournalEntryMapper.toDomain(row).postings().get(1).amount()).isEqualTo(new Money(new BigDecimal("5"), JPY));
+    }
 }

@@ -13,6 +13,7 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.ServletRequestBindingException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
@@ -22,6 +23,7 @@ import com.raketmakhim.ledger.accounting.domain.account.AccountNotActiveExceptio
 import com.raketmakhim.ledger.accounting.domain.account.AccountNotFoundException;
 import com.raketmakhim.ledger.accounting.domain.account.InsufficientFundsException;
 import com.raketmakhim.ledger.accounting.domain.journal.DuplicateReferenceException;
+import com.raketmakhim.ledger.accounting.domain.journal.IdempotencyKeyReuseException;
 import com.raketmakhim.ledger.accounting.domain.money.CurrencyMismatchException;
 import com.raketmakhim.ledger.accounting.domain.money.UnsupportedCurrencyException;
 
@@ -51,10 +53,15 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return problem(HttpStatus.UNPROCESSABLE_ENTITY, "account-not-active", "Account not active", e.getMessage());
     }
 
-    // shortcut: a repeated request gets a 409. Replaying the first response is idempotency (roadmap item 3).
+    // A new key with a reference that is already used. Retrying with the same key is replayed, not refused.
     @ExceptionHandler(DuplicateReferenceException.class)
     ProblemDetail duplicateReference(DuplicateReferenceException e) {
         return problem(HttpStatus.CONFLICT, "duplicate-reference", "Duplicate reference", e.getMessage());
+    }
+
+    @ExceptionHandler(IdempotencyKeyReuseException.class)
+    ProblemDetail idempotencyKeyReuse(IdempotencyKeyReuseException e) {
+        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "idempotency-key-reuse", "Idempotency key reused", e.getMessage());
     }
 
     // The exception's message holds the balance, which the caller may not be allowed to see, so it is not sent.
@@ -112,6 +119,14 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     protected ResponseEntity<Object> handleHttpMessageNotReadable(HttpMessageNotReadableException e, HttpHeaders headers,
                                                                   HttpStatusCode status, WebRequest request) {
         return invalidRequest(e, BODY_PROBLEM, headers, status, request);
+    }
+
+    // for example a missing Idempotency-Key header
+    @Override
+    protected ResponseEntity<Object> handleServletRequestBindingException(ServletRequestBindingException e,
+                                                                          HttpHeaders headers, HttpStatusCode status,
+                                                                          WebRequest request) {
+        return invalidRequest(e, "A required header is missing.", headers, status, request);
     }
 
     // for example an id in the URL that is not a UUID

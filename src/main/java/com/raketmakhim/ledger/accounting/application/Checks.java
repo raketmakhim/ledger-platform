@@ -18,6 +18,16 @@ final class Checks {
         }
     }
 
+    // V1__init.sql has a matching VARCHAR(64)
+    private static final int MAX_KEY_LENGTH = 64;
+
+    static void idempotencyKey(String key){
+        Require.notNull(key, "Idempotency key");
+        if (key.isBlank() || key.length() > MAX_KEY_LENGTH){
+            throw new IllegalArgumentException("Idempotency key must be 1 to " + MAX_KEY_LENGTH + " characters.");
+        }
+    }
+
     static void customerAccount(Account account, String operation){
         if (account.type() != AccountType.CUSTOMER){
             throw new IllegalArgumentException(operation + " needs a customer account, not " + account.type() + ".");

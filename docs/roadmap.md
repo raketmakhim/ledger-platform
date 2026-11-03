@@ -26,7 +26,7 @@
 
 ## 2. Transfers API
 
-**Status:** Built: `POST /transfers` (`accounting/adapter/web`: `TransferController`, request and response records, `ApiExceptionHandler`), with `TransferService` wired as a bean in `LedgerConfig`. Tested at two levels: `TransferControllerTest` (`@WebMvcTest`, service mocked) and `TransferEndpointTest` (whole app, real Postgres). Not built: real authentication (item 6), a way to put money in over HTTP (accounts start at zero, so demo balances come from a SQL script), and idempotency (item 3). Built since: the accounts endpoints (`POST /accounts`, `GET /accounts/{id}`, `GET /accounts`) and the ownership check, so a caller can only move money out of their own accounts. A reused `reference` is already refused with a 409 (`UNIQUE (type, reference)`), but the original response is not replayed. Callers are identified by an `X-Customer-Id` header that anyone can fake, so the API must not be exposed publicly until real login replaces it.
+**Status:** Built: `POST /transfers` (`accounting/adapter/web`: `TransferController`, request and response records, `ApiExceptionHandler`), with `TransferService` wired as a bean in `LedgerConfig`. Tested at two levels: `TransferControllerTest` (`@WebMvcTest`, service mocked) and `TransferEndpointTest` (whole app, real Postgres). Not built: real authentication (item 6), a way to put money in over HTTP (accounts start at zero, so demo balances come from a SQL script), Built since: idempotency (item 3), the accounts endpoints (`POST /accounts`, `GET /accounts/{id}`, `GET /accounts`) and the ownership check, so a caller can only move money out of their own accounts. A reused `reference` under a new key is refused with a 409 (`UNIQUE (type, reference)`), and a retry with the same `Idempotency-Key` replays the original response (item 3). Callers are identified by an `X-Customer-Id` header that anyone can fake, so the API must not be exposed publicly until real login replaces it.
 
 **Validation**
 - Amount is positive.
@@ -41,19 +41,19 @@
 
 ## 3. Idempotency
 
-**Status:** Not started.
+**Status:** Built for `POST /transfers`. Deposits have no HTTP endpoint yet, so they have no key. Not built: expiring old records (see `todo.md`).
 
-**Table:** `idempotency_record` with key, client/principal, request hash, status, response code, response body and expiry.
+**How it works:** the client sends an `Idempotency-Key` header (1 to 64 characters, required). `TransferService` looks up (caller, key) in `idempotency_record`.
+- Same key and same request: the first entry is returned (a 201 with the same body) and no money moves.
+- Same key and a different request: 422 `idempotency-key-reuse`.
+- New key: the transfer runs. The key is claimed before the accounts and entry are saved, in the same transaction, so a failed transfer stores nothing and a retry runs again.
+- Two requests with one key at the same moment: the second waits on the primary key, then gets a concurrency failure, is retried, and replays the first.
+- Keys belong to the caller, so one caller can never read another's result.
 
-**Flow**
-1. Insert the record first. The unique constraint on (client, key) handles races.
-2. Write the stored response in the same transaction as the postings, so the two can never diverge.
-
-**Edge cases**
-- Same key and same request hash: replay the stored response.
-- Same key with a different request: 422.
-- Original request still in progress: 409.
-- Scope keys per client, otherwise one user's key could collide with another's.
+**Choices:**
+- The replay is rebuilt from the saved entry, not from a stored response body. The request is compared as a plain text fingerprint, so there is no hash.
+- Failures are not stored: a retry after "insufficient funds" runs again and may succeed.
+- A new key with a reference that is already used is still a 409 `duplicate-reference` (`UNIQUE (type, reference)` stays as the backstop).
 
 ## 4. Concurrency
 

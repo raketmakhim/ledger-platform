@@ -29,6 +29,17 @@ CREATE TABLE posting (
     currency    CHAR(3)       NOT NULL
 );
 
+-- The first result for a caller's Idempotency-Key. The key is claimed before the entry is saved, so the
+-- foreign key is checked at commit. The primary key makes two requests with one key wait for each other.
+CREATE TABLE idempotency_record (
+    caller_id        UUID         NOT NULL,
+    idempotency_key  VARCHAR(64)  NOT NULL,
+    fingerprint      VARCHAR(255) NOT NULL,
+    entry_id         UUID         NOT NULL REFERENCES journal_entry (id) DEFERRABLE INITIALLY DEFERRED,
+    created_at       TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    CONSTRAINT idempotency_record_pk PRIMARY KEY (caller_id, idempotency_key)
+);
+
 CREATE INDEX posting_entry_id_idx   ON posting (entry_id);
 CREATE INDEX posting_account_id_idx ON posting (account_id);
 CREATE INDEX account_owner_id_idx   ON account (owner_id);

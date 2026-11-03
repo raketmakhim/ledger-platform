@@ -75,9 +75,14 @@ class TransferEndpointTest {
     }
 
     private ResultActions transferAs(UUID caller, UUID from, UUID to, String amount, String reference) throws Exception {
+        return transferWithKey(caller, ids.newId().toString(), from, to, amount, reference);
+    }
+
+    private ResultActions transferWithKey(UUID caller, String key, UUID from, UUID to, String amount, String reference)
+            throws Exception {
         String json = "{\"from\":\"" + from + "\",\"to\":\"" + to + "\",\"amount\":\"" + amount
                 + "\",\"currency\":\"GBP\",\"reference\":\"" + reference + "\"}";
-        return mvc.perform(post("/transfers").header("X-Customer-Id", caller.toString())
+        return mvc.perform(post("/transfers").header("X-Customer-Id", caller.toString()).header("Idempotency-Key", key)
                 .contentType(MediaType.APPLICATION_JSON).content(json));
     }
 
@@ -101,7 +106,7 @@ class TransferEndpointTest {
         UUID alice = newCustomer("100.00");
         UUID bob = newCustomer("0.00");
 
-        mvc.perform(post("/transfers").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/transfers").header("Idempotency-Key", "k").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"from\":\"" + alice + "\",\"to\":\"" + bob
                                 + "\",\"amount\":\"1.00\",\"currency\":\"GBP\",\"reference\":\"E2E-NOBODY\"}"))
                 .andExpect(status().isUnauthorized())
@@ -163,5 +168,51 @@ class TransferEndpointTest {
 
         assertThat(balance(bob)).isEqualTo(gbp("5.00"));
         assertThat(entryCount("E2E-404")).isZero();
+    }
+
+    // --- idempotency: the same key is the same payment ---
+
+    @Test
+    void retryingWithTheSameKeyReplaysTheFirstResponseAndMovesMoneyOnce() throws Exception {
+        UUID alice = newCustomer("100.00");
+        UUID bob = newCustomer("0.00");
+
+        String first = transferWithKey(OWNER, "E2E-KEY-1", alice, bob, "10.00", "E2E-KEY-REF")
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        String retry = transferWithKey(OWNER, "E2E-KEY-1", alice, bob, "10.00", "E2E-KEY-REF")
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+
+        assertThat(retry).isEqualTo(first);
+        assertThat(balance(alice)).isEqualTo(gbp("90.00"));
+        assertThat(balance(bob)).isEqualTo(gbp("10.00"));
+        assertThat(entryCount("E2E-KEY-REF")).isEqualTo(1);
+    }
+
+    @Test
+    void theSameKeyForADifferentRequestReturns422AndMovesNothing() throws Exception {
+        UUID alice = newCustomer("100.00");
+        UUID bob = newCustomer("0.00");
+        transferWithKey(OWNER, "E2E-KEY-2", alice, bob, "10.00", "E2E-KEY-2A").andExpect(status().isCreated());
+
+        transferWithKey(OWNER, "E2E-KEY-2", alice, bob, "20.00", "E2E-KEY-2A")
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.type").value("urn:ledger:problem:idempotency-key-reuse"));
+
+        assertThat(balance(alice)).isEqualTo(gbp("90.00"));
+    }
+
+    @Test
+    void aRequestWithoutAnIdempotencyKeyReturns400() throws Exception {
+        UUID alice = newCustomer("100.00");
+        UUID bob = newCustomer("0.00");
+
+        mvc.perform(post("/transfers").header("X-Customer-Id", OWNER.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"from\":\"" + alice + "\",\"to\":\"" + bob
+                                + "\",\"amount\":\"1.00\",\"currency\":\"GBP\",\"reference\":\"E2E-NOKEY\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.type").value("urn:ledger:problem:invalid-request"));
+
+        assertThat(balance(alice)).isEqualTo(gbp("100.00"));
     }
 }

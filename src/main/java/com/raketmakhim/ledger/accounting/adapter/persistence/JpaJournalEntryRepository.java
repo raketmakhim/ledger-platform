@@ -1,6 +1,5 @@
 package com.raketmakhim.ledger.accounting.adapter.persistence;
 
-import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,20 +31,10 @@ public class JpaJournalEntryRepository implements JournalEntryRepository {
             // send the insert now: otherwise a duplicate reference only fails at commit, too late to report clearly
             entityManager.flush();
         } catch (PersistenceException e) {
-            if (isDuplicateReference(e)) {
+            if (Constraints.violated(e, UNIQUE_REFERENCE)) {
                 throw new DuplicateReferenceException(entry.type(), entry.reference());
             }
             throw e;
         }
-    }
-
-    private static boolean isDuplicateReference(Throwable failure) {
-        for (Throwable t = failure; t != null; t = t.getCause()) {
-            if (t instanceof ConstraintViolationException violation
-                    && UNIQUE_REFERENCE.equalsIgnoreCase(violation.getConstraintName())) {
-                return true;
-            }
-        }
-        return false;
     }
 }
