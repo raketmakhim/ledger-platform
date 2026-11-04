@@ -37,7 +37,7 @@
 
 **Errors** (done): Spring's built-in `ProblemDetail`, with a stable type URN per failure (`urn:ledger:problem:insufficient-funds`, `account-not-found`, `account-not-active`, `currency-mismatch`, `unsupported-currency`, `invalid-amount`, `same-account`, `not-a-customer-account`, `concurrent-update`, `invalid-request`, `internal-error`) so clients can branch on it. Statuses: 404 unknown account, 422 broken business rule, 409 retries used up, 400 bad request, 500 anything unexpected (the message is logged, not sent). A request that needs no data to refuse is a 400 (`invalid-amount` for zero or negative, `same-account`), and one refused after loading an account is a 422 (`not-a-customer-account`). Malformed input (a missing value, a bad reference or key, too many decimals) is `IllegalArgumentException` and maps to `invalid-request`.
 
-**Request and response** (done): the body is `from`, `to`, `amount` (a string such as `"10.00"`), `currency` and `reference`. The client chooses the reference, because it will become the duplicate check. Returns 201 with the journal entry and a `Location` of `/journal-entries/{id}`, which does not exist yet.
+**Request and response** (done): the body is `from`, `to`, `amount` (a string such as `"10.00"`), `currency` and `reference`. The client chooses the reference, because it will become the duplicate check. Returns 201 with the journal entry and a `Location` of `/journal-entries/{id}`, which works: `GET /journal-entries/{id}` returns the same body to anyone who owns one of its accounts, without the bank's own postings (404 for anyone else).
 
 ## 3. Idempotency
 

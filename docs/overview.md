@@ -132,9 +132,10 @@ The mappers are unit-tested. The repositories need a real database, so `JpaRepos
 
 ## API (`accounting/adapter/web`)
 
-- `POST /accounts` (open an empty account in GBP, EUR, USD or JPY), `GET /accounts/{id}`, `GET /accounts` (the caller's own, oldest first), and `POST /transfers`, which needs an `Idempotency-Key` header (a missing one is a 400, a reused one with a different body is a 422). Health is at `/actuator/health`, with `/liveness` and `/readiness` (readiness includes the database).
+- `POST /accounts` (open an empty account in GBP, EUR, USD or JPY), `GET /accounts/{id}`, `GET /accounts` (the caller's own, oldest first), and `GET /journal-entries/{id}` and `POST /transfers`, which needs an `Idempotency-Key` header (a missing one is a 400, a reused one with a different body is a 422). Health is at `/actuator/health`, with `/liveness` and `/readiness` (readiness includes the database).
 - **Who is calling:** the `X-Customer-Id` header, read in one place (`CallerArgumentResolver`) into a `Caller`. Controllers pass only its id to the services, so real login can replace the header without touching them. Missing or invalid header is a 401. Anyone can fake the header, so this is not security yet.
 - **Ownership:** `AccountService` shows an account only to its owner, and `TransferService` takes money only from the caller's accounts. Anything else is "not found", the same as a missing account, so ids cannot be probed. A transfer's destination can be anyone's.
+- **Reading an entry:** `JournalEntryService` lets someone who owns one of the entry's accounts read it, and shows every posting except those on the bank's own accounts (so a customer never sees the clearing account). The body is the same as the one `POST /transfers` returns, and the `Location` header points at it. Anyone else gets a 404, the same as for an unknown id. The result is an `EntryView`, not a `JournalEntry`, because the visible postings may not add up to zero.
 - **Errors:** every failure is a `ProblemDetail` with a fixed `urn:ledger:problem:<slug>` type (see `ApiExceptionHandler`).
 - The Postman collection in `docs/postman` covers all of it.
 

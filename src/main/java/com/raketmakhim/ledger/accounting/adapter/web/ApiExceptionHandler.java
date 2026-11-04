@@ -26,6 +26,7 @@ import com.raketmakhim.ledger.accounting.domain.account.NotCustomerAccountExcept
 import com.raketmakhim.ledger.accounting.domain.account.SameAccountException;
 import com.raketmakhim.ledger.accounting.domain.journal.DuplicateReferenceException;
 import com.raketmakhim.ledger.accounting.domain.journal.IdempotencyKeyReuseException;
+import com.raketmakhim.ledger.accounting.domain.journal.JournalEntryNotFoundException;
 import com.raketmakhim.ledger.accounting.domain.money.CurrencyMismatchException;
 import com.raketmakhim.ledger.accounting.domain.money.InvalidAmountException;
 import com.raketmakhim.ledger.accounting.domain.money.UnsupportedCurrencyException;
@@ -49,6 +50,11 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(AccountNotFoundException.class)
     ProblemDetail accountNotFound(AccountNotFoundException e) {
         return problem(HttpStatus.NOT_FOUND, "account-not-found", "Account not found", e.getMessage());
+    }
+
+    @ExceptionHandler(JournalEntryNotFoundException.class)
+    ProblemDetail entryNotFound(JournalEntryNotFoundException e) {
+        return problem(HttpStatus.NOT_FOUND, "entry-not-found", "Entry not found", e.getMessage());
     }
 
     @ExceptionHandler(AccountNotActiveException.class)

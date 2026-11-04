@@ -1154,6 +1154,187 @@
           ]
         }
       ]
+    },
+    {
+      "name": "Journal entries",
+      "item": [
+        {
+          "name": "Happy path",
+          "item": [
+            {
+              "name": "Read the transfer back (200)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                      "pm.test('it is the entry the transfer created', () => pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('transferEntryId')));",
+                      "pm.test('both postings are shown', () => pm.expect(pm.response.json().postings.length).to.eql(2));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Customer-Id",
+                    "value": "{{customerId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/journal-entries/{{transferEntryId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "journal-entries",
+                    "{{transferEntryId}}"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sad path",
+          "item": [
+            {
+              "name": "Someone else's entry (404)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('status is 404', () => pm.response.to.have.status(404));",
+                      "pm.test('type is entry-not-found', () => pm.expect(pm.response.json().type).to.eql('urn:ledger:problem:entry-not-found'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Customer-Id",
+                    "value": "{{$guid}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/journal-entries/{{transferEntryId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "journal-entries",
+                    "{{transferEntryId}}"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Unknown entry (404)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('status is 404', () => pm.response.to.have.status(404));",
+                      "pm.test('type is entry-not-found', () => pm.expect(pm.response.json().type).to.eql('urn:ledger:problem:entry-not-found'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Customer-Id",
+                    "value": "{{customerId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/journal-entries/00000000-0000-7000-8000-00000000ffff",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "journal-entries",
+                    "00000000-0000-7000-8000-00000000ffff"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Id is not a UUID (400)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('status is 400', () => pm.response.to.have.status(400));",
+                      "pm.test('type is invalid-request', () => pm.expect(pm.response.json().type).to.eql('urn:ledger:problem:invalid-request'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Customer-Id",
+                    "value": "{{customerId}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/journal-entries/not-a-uuid",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "journal-entries",
+                    "not-a-uuid"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "No caller (401)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('status is 401', () => pm.response.to.have.status(401));",
+                      "pm.test('type is unauthenticated', () => pm.expect(pm.response.json().type).to.eql('urn:ledger:problem:unauthenticated'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/journal-entries/00000000-0000-7000-8000-00000000ffff",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "journal-entries",
+                    "00000000-0000-7000-8000-00000000ffff"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
     }
   ]
 }

@@ -103,7 +103,15 @@ class TransferServiceTest {
                 accounts.put(account.id(), account);
             }
         };
-        entryRepository = savedEntries::add;
+        entryRepository = new JournalEntryRepository() {
+            public void save(JournalEntry entry) {
+                savedEntries.add(entry);
+            }
+
+            public Optional<JournalEntry> findById(UUID id) {
+                return savedEntries.stream().filter(e -> e.id().equals(id)).findFirst();
+            }
+        };
         keyRepository = new IdempotencyRepository() {
             public Optional<IdempotencyRecord> find(UUID callerId, String key) {
                 return Optional.ofNullable(records.get(callerId + "/" + key));

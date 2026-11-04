@@ -352,4 +352,21 @@ class JpaRepositoriesTest {
 
         assertThat(keys.deleteExpired(NOW)).isZero();
     }
+
+    // --- reading entries back ---
+
+    @Test
+    void aSavedEntryIsFoundWithItsPostingsDebitFirst() {
+        JournalEntry entry = savedEntry("READ-1");
+
+        JournalEntry found = entries.findById(entry.id()).orElseThrow();
+
+        assertThat(found).isEqualTo(entry);
+        assertThat(found.postings().get(0).amount().amount()).isNegative();
+    }
+
+    @Test
+    void anUnknownEntryIsNotFound() {
+        assertThat(entries.findById(ids.newId())).isEmpty();
+    }
 }

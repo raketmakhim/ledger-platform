@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verify;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Currency;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
 
@@ -74,6 +75,11 @@ class TransactionBoundaryTest {
             saves++;
             beforeSave.accept(entry);
             real.save(entry);
+        }
+
+        @Override
+        public Optional<JournalEntry> findById(UUID id) {
+            return real.findById(id);
         }
     }
 

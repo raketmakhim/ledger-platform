@@ -1,5 +1,8 @@
 package com.raketmakhim.ledger.accounting.adapter.persistence;
 
+import java.util.Optional;
+import java.util.UUID;
+
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +24,13 @@ public class JpaJournalEntryRepository implements JournalEntryRepository {
 
     public JpaJournalEntryRepository(EntityManager entityManager) {
         this.entityManager = entityManager;
+    }
+
+    // one transaction, because the postings are loaded lazily while the entry is converted
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<JournalEntry> findById(UUID id) {
+        return Optional.ofNullable(entityManager.find(JournalEntryEntity.class, id)).map(JournalEntryMapper::toDomain);
     }
 
     @Override

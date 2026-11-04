@@ -67,7 +67,15 @@ class DepositServiceTest {
                 accounts.put(account.id(), account);
             }
         };
-        JournalEntryRepository entryRepository = savedEntries::add;
+        JournalEntryRepository entryRepository = new JournalEntryRepository() {
+            public void save(JournalEntry entry) {
+                savedEntries.add(entry);
+            }
+
+            public Optional<JournalEntry> findById(UUID id) {
+                return savedEntries.stream().filter(e -> e.id().equals(id)).findFirst();
+            }
+        };
         IdGenerator ids = () -> new UUID(2, nextId++);
         service = new DepositService(accountRepository, entryRepository, ids, Clock.fixed(NOW, ZoneOffset.UTC));
 

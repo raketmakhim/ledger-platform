@@ -10,6 +10,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import com.raketmakhim.ledger.accounting.application.AccountRepository;
 import com.raketmakhim.ledger.accounting.application.AccountService;
 import com.raketmakhim.ledger.accounting.application.IdGenerator;
+import com.raketmakhim.ledger.accounting.application.JournalEntryRepository;
+import com.raketmakhim.ledger.accounting.application.JournalEntryService;
 
 /** Creates the beans that can't carry annotations (the JDK clock, and the plain AccountService). */
 @Configuration
@@ -26,5 +28,11 @@ class LedgerConfig {
     @Bean
     AccountService accountService(AccountRepository accounts, IdGenerator ids, Clock clock) {
         return new AccountService(accounts, ids, clock);
+    }
+
+    // only reads, and the repositories open their own read transactions
+    @Bean
+    JournalEntryService journalEntryService(JournalEntryRepository entries, AccountRepository accounts) {
+        return new JournalEntryService(entries, accounts);
     }
 }
