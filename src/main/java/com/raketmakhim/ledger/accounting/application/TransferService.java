@@ -10,6 +10,7 @@ import java.util.UUID;
 import com.raketmakhim.ledger.accounting.domain.Require;
 import com.raketmakhim.ledger.accounting.domain.account.Account;
 import com.raketmakhim.ledger.accounting.domain.account.AccountNotFoundException;
+import com.raketmakhim.ledger.accounting.domain.account.SameAccountException;
 import com.raketmakhim.ledger.accounting.domain.journal.EntryType;
 import com.raketmakhim.ledger.accounting.domain.journal.IdempotencyKeyReuseException;
 import com.raketmakhim.ledger.accounting.domain.journal.JournalEntry;
@@ -61,7 +62,7 @@ public class TransferService {
         Require.notNull(fromId, "FromId");
         Require.notNull(toId, "ToId");
         if (fromId.equals(toId)){
-            throw new IllegalArgumentException("Cannot transfer to the same account.");
+            throw new SameAccountException();
         }
         Optional<IdempotencyRecord> earlier = keys.find(callerId, command.key());
         if (earlier.isPresent()){

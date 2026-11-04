@@ -33,10 +33,13 @@ import com.raketmakhim.ledger.accounting.domain.account.AccountNotFoundException
 import com.raketmakhim.ledger.accounting.domain.account.AccountStatus;
 import com.raketmakhim.ledger.accounting.domain.account.AccountType;
 import com.raketmakhim.ledger.accounting.domain.account.InsufficientFundsException;
+import com.raketmakhim.ledger.accounting.domain.account.NotCustomerAccountException;
+import com.raketmakhim.ledger.accounting.domain.account.SameAccountException;
 import com.raketmakhim.ledger.accounting.domain.journal.EntryType;
 import com.raketmakhim.ledger.accounting.domain.journal.IdempotencyKeyReuseException;
 import com.raketmakhim.ledger.accounting.domain.journal.JournalEntry;
 import com.raketmakhim.ledger.accounting.domain.money.CurrencyMismatchException;
+import com.raketmakhim.ledger.accounting.domain.money.InvalidAmountException;
 import com.raketmakhim.ledger.accounting.domain.money.Money;
 
 class TransferServiceTest {
@@ -186,29 +189,40 @@ class TransferServiceTest {
         assertThat(accounts.get(ALICE).balance().isZero()).isTrue();
     }
 
-    static Stream<Money> badAmounts() {
-        return Stream.of(gbp("0"), gbp("-5"), null);
-    }
-
     @ParameterizedTest
-    @MethodSource("badAmounts")
-    void rejectsZeroNegativeAndNullAmounts(Money amount) {
-        assertThatThrownBy(() -> transfer(ALICE_OWNER, ALICE, BOB, amount, "r")).isInstanceOf(IllegalArgumentException.class);
+    @ValueSource(strings = {"0", "-5"})
+    void rejectsZeroAndNegativeAmounts(String amount) {
+        assertThatThrownBy(() -> transfer(ALICE_OWNER, ALICE, BOB, gbp(amount), "r")).isInstanceOf(InvalidAmountException.class);
         assertNothingChangedOrSaved();
     }
 
-    static Stream<Arguments> badAccountPairs() {
-        return Stream.of(
-                Arguments.of(null, BOB),
-                Arguments.of(ALICE, null),
-                Arguments.of(ALICE, ALICE),
-                Arguments.of(ALICE, CLEARING));
+    @Test
+    void rejectsAMissingAmount() {
+        assertThatThrownBy(() -> transfer(ALICE_OWNER, ALICE, BOB, null, "r")).isInstanceOf(IllegalArgumentException.class);
+        assertNothingChangedOrSaved();
+    }
+
+    static Stream<Arguments> missingAccounts() {
+        return Stream.of(Arguments.of(null, BOB), Arguments.of(ALICE, null));
     }
 
     @ParameterizedTest
-    @MethodSource("badAccountPairs")
-    void rejectsNullSameAndSystemAccounts(UUID from, UUID to) {
+    @MethodSource("missingAccounts")
+    void rejectsMissingAccountIds(UUID from, UUID to) {
         assertThatThrownBy(() -> transfer(ALICE_OWNER, from, to, gbp("10"), "r")).isInstanceOf(IllegalArgumentException.class);
+        assertNothingChangedOrSaved();
+    }
+
+    @Test
+    void rejectsTheSameAccountOnBothSides() {
+        assertThatThrownBy(() -> transfer(ALICE_OWNER, ALICE, ALICE, gbp("10"), "r")).isInstanceOf(SameAccountException.class);
+        assertNothingChangedOrSaved();
+    }
+
+    @Test
+    void rejectsTransferIntoTheBanksOwnAccount() {
+        assertThatThrownBy(() -> transfer(ALICE_OWNER, ALICE, CLEARING, gbp("10"), "r"))
+                .isInstanceOf(NotCustomerAccountException.class);
         assertNothingChangedOrSaved();
     }
 

@@ -22,9 +22,12 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 import com.raketmakhim.ledger.accounting.domain.account.AccountNotActiveException;
 import com.raketmakhim.ledger.accounting.domain.account.AccountNotFoundException;
 import com.raketmakhim.ledger.accounting.domain.account.InsufficientFundsException;
+import com.raketmakhim.ledger.accounting.domain.account.NotCustomerAccountException;
+import com.raketmakhim.ledger.accounting.domain.account.SameAccountException;
 import com.raketmakhim.ledger.accounting.domain.journal.DuplicateReferenceException;
 import com.raketmakhim.ledger.accounting.domain.journal.IdempotencyKeyReuseException;
 import com.raketmakhim.ledger.accounting.domain.money.CurrencyMismatchException;
+import com.raketmakhim.ledger.accounting.domain.money.InvalidAmountException;
 import com.raketmakhim.ledger.accounting.domain.money.UnsupportedCurrencyException;
 
 /**
@@ -81,8 +84,26 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return problem(HttpStatus.UNPROCESSABLE_ENTITY, "unsupported-currency", "Unsupported currency", e.getMessage());
     }
 
-    // shortcut: the domain throws plain IllegalArgumentException for several different problems, so they share
-    // one type. Give each its own exception before clients depend on telling them apart.
+    // Checked with no data needed, so a 400 like the other malformed-request cases.
+    @ExceptionHandler(InvalidAmountException.class)
+    ProblemDetail invalidAmount(InvalidAmountException e) {
+        return problem(HttpStatus.BAD_REQUEST, "invalid-amount", "Invalid amount", e.getMessage());
+    }
+
+    @ExceptionHandler(SameAccountException.class)
+    ProblemDetail sameAccount(SameAccountException e) {
+        return problem(HttpStatus.BAD_REQUEST, "same-account", "Same account", e.getMessage());
+    }
+
+    // Found only after loading the account, so a 422. The message names the account type, which is not sent.
+    @ExceptionHandler(NotCustomerAccountException.class)
+    ProblemDetail notCustomerAccount(NotCustomerAccountException e) {
+        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "not-a-customer-account", "Not a customer account",
+                "The account cannot be used for this: it is not a customer account.");
+    }
+
+    // What is left is malformed input (a missing value, a bad reference or key, too many decimals), which the
+    // domain rejects with plain IllegalArgumentException, so it shares one type.
     @ExceptionHandler(IllegalArgumentException.class)
     ProblemDetail invalidArgument(IllegalArgumentException e) {
         return problem(HttpStatus.BAD_REQUEST, "invalid-request", "Invalid request", e.getMessage());

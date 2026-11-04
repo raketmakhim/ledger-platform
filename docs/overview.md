@@ -49,7 +49,7 @@ Every domain object is immutable and checks its own rules in its constructor, so
 
 ### Errors
 
-Rules the API must tell apart have their own exception, all under `DomainException`: `InsufficientFundsException`, `AccountNotActiveException`, `CurrencyMismatchException`, `UnbalancedEntryException`, `AccountNotFoundException` and `UnsupportedCurrencyException` (no clearing account for the currency). Each carries the details the API will need. Everything else (nulls, bad decimals and so on) throws `IllegalArgumentException`.
+Rules the API must tell apart have their own exception, all under `DomainException`: `InsufficientFundsException`, `AccountNotActiveException`, `CurrencyMismatchException`, `UnbalancedEntryException`, `AccountNotFoundException`, `UnsupportedCurrencyException` (no clearing account for the currency), `InvalidAmountException` (zero or negative), `SameAccountException` and `NotCustomerAccountException` (the bank's own account where a customer account is needed). Each carries the details the API will need. Everything else (nulls, bad decimals, a bad reference or key) is malformed input and throws `IllegalArgumentException`.
 
 ## Application (`accounting/application`)
 
@@ -69,7 +69,7 @@ Nothing is saved unless every rule passes. The services themselves are plain Jav
 
 **Idempotency:** the key makes a retry safe. After the input checks, the service looks up (caller, key). A match on the same request returns the first entry and moves nothing, a match on a different request throws `IdempotencyKeyReuseException` (422), and no match runs the transfer. The request is compared as a plain text "fingerprint" of from, to, amount, currency and reference, so no hash is needed. The key is claimed (saved) before the accounts and the entry, so a second request with the same key waits for the first and then replays it. A request that fails stores nothing, so a retry runs again. Keys are 1 to 64 characters and belong to the caller. A key only counts for a while (`ledger.idempotency.window`, 24 hours): `IdempotencyRecord.hasExpired(now, window)` says when, and after that the old record is released and the same key is a new payment (a reused reference is still refused by the database).
 
-Two small helpers keep the services short. `Checks` (application, package-private) holds the rules both services share: the amount must be positive and the account must be a customer account. `Require.notNull` (domain) is the null check used by every domain object. It throws `IllegalArgumentException`, so the API has one exception type to map to a 400.
+Two small helpers keep the services short. `Checks` (application, package-private) holds the rules both services share: the amount must be positive (`InvalidAmountException`) and the account must be a customer account (`NotCustomerAccountException`). `Require.notNull` (domain) is the null check used by every domain object. It throws `IllegalArgumentException`, which the API maps to one 400 type for malformed input.
 
 The services depend on interfaces, not implementations:
 

@@ -23,9 +23,11 @@ import com.raketmakhim.ledger.accounting.domain.account.AccountNotActiveExceptio
 import com.raketmakhim.ledger.accounting.domain.account.AccountNotFoundException;
 import com.raketmakhim.ledger.accounting.domain.account.AccountStatus;
 import com.raketmakhim.ledger.accounting.domain.account.AccountType;
+import com.raketmakhim.ledger.accounting.domain.account.NotCustomerAccountException;
 import com.raketmakhim.ledger.accounting.domain.journal.EntryType;
 import com.raketmakhim.ledger.accounting.domain.journal.JournalEntry;
 import com.raketmakhim.ledger.accounting.domain.money.CurrencyMismatchException;
+import com.raketmakhim.ledger.accounting.domain.money.InvalidAmountException;
 import com.raketmakhim.ledger.accounting.domain.money.Money;
 import com.raketmakhim.ledger.accounting.domain.money.UnsupportedCurrencyException;
 
@@ -117,8 +119,8 @@ class DepositServiceTest {
 
     @Test
     void rejectsZeroNegativeAndNullAmounts() {
-        assertThatThrownBy(() -> service.deposit(CUSTOMER_ID, gbp("0"), "r")).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> service.deposit(CUSTOMER_ID, gbp("-5"), "r")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.deposit(CUSTOMER_ID, gbp("0"), "r")).isInstanceOf(InvalidAmountException.class);
+        assertThatThrownBy(() -> service.deposit(CUSTOMER_ID, gbp("-5"), "r")).isInstanceOf(InvalidAmountException.class);
         assertThatThrownBy(() -> service.deposit(CUSTOMER_ID, null, "r")).isInstanceOf(IllegalArgumentException.class);
         assertNothingChangedOrSaved();
     }
@@ -135,7 +137,7 @@ class DepositServiceTest {
 
     @Test
     void rejectsDepositIntoSystemAccount() {
-        assertThatThrownBy(() -> service.deposit(CLEARING_ID, gbp("10"), "r")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.deposit(CLEARING_ID, gbp("10"), "r")).isInstanceOf(NotCustomerAccountException.class);
         assertNothingChangedOrSaved();
     }
 

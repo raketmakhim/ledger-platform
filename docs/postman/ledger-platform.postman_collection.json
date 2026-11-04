@@ -969,7 +969,7 @@
                     "type": "text/javascript",
                     "exec": [
                       "pm.test('status is 400', () => pm.response.to.have.status(400));",
-                      "pm.test('type is invalid-request', () => pm.expect(pm.response.json().type).to.eql('urn:ledger:problem:invalid-request'));"
+                      "pm.test('type is same-account', () => pm.expect(pm.response.json().type).to.eql('urn:ledger:problem:same-account'));"
                     ]
                   }
                 }
@@ -1014,7 +1014,7 @@
                     "type": "text/javascript",
                     "exec": [
                       "pm.test('status is 400', () => pm.response.to.have.status(400));",
-                      "pm.test('type is invalid-request', () => pm.expect(pm.response.json().type).to.eql('urn:ledger:problem:invalid-request'));"
+                      "pm.test('type is invalid-amount', () => pm.expect(pm.response.json().type).to.eql('urn:ledger:problem:invalid-amount'));"
                     ]
                   }
                 }

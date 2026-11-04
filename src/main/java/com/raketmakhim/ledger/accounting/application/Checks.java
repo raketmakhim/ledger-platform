@@ -3,6 +3,8 @@ package com.raketmakhim.ledger.accounting.application;
 import com.raketmakhim.ledger.accounting.domain.Require;
 import com.raketmakhim.ledger.accounting.domain.account.Account;
 import com.raketmakhim.ledger.accounting.domain.account.AccountType;
+import com.raketmakhim.ledger.accounting.domain.account.NotCustomerAccountException;
+import com.raketmakhim.ledger.accounting.domain.money.InvalidAmountException;
 import com.raketmakhim.ledger.accounting.domain.money.Money;
 
 /** Input rules shared by the services. {@code operation} is only used in the error message, e.g. "Deposit". */
@@ -14,7 +16,7 @@ final class Checks {
     static void positiveAmount(Money amount, String operation){
         Require.notNull(amount, "Amount");
         if (!amount.isPositive()){
-            throw new IllegalArgumentException(operation + " amount must be positive: " + amount.amount());
+            throw new InvalidAmountException(operation, amount.amount());
         }
     }
 
@@ -30,7 +32,7 @@ final class Checks {
 
     static void customerAccount(Account account, String operation){
         if (account.type() != AccountType.CUSTOMER){
-            throw new IllegalArgumentException(operation + " needs a customer account, not " + account.type() + ".");
+            throw new NotCustomerAccountException(operation, account.type());
         }
     }
 }

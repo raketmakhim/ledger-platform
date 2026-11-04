@@ -36,13 +36,17 @@ import com.raketmakhim.ledger.accounting.application.TransferService;
 import com.raketmakhim.ledger.accounting.domain.account.AccountNotActiveException;
 import com.raketmakhim.ledger.accounting.domain.account.AccountNotFoundException;
 import com.raketmakhim.ledger.accounting.domain.account.AccountStatus;
+import com.raketmakhim.ledger.accounting.domain.account.AccountType;
 import com.raketmakhim.ledger.accounting.domain.account.InsufficientFundsException;
+import com.raketmakhim.ledger.accounting.domain.account.NotCustomerAccountException;
+import com.raketmakhim.ledger.accounting.domain.account.SameAccountException;
 import com.raketmakhim.ledger.accounting.domain.journal.DuplicateReferenceException;
 import com.raketmakhim.ledger.accounting.domain.journal.EntryType;
 import com.raketmakhim.ledger.accounting.domain.journal.IdempotencyKeyReuseException;
 import com.raketmakhim.ledger.accounting.domain.journal.JournalEntry;
 import com.raketmakhim.ledger.accounting.domain.journal.Posting;
 import com.raketmakhim.ledger.accounting.domain.money.CurrencyMismatchException;
+import com.raketmakhim.ledger.accounting.domain.money.InvalidAmountException;
 import com.raketmakhim.ledger.accounting.domain.money.Money;
 import com.raketmakhim.ledger.accounting.domain.money.UnsupportedCurrencyException;
 
@@ -202,8 +206,11 @@ class TransferControllerTest {
                 Arguments.of(new InsufficientFundsException(gbp("5.00"), gbp("10.00").negate()), 422, "insufficient-funds"),
                 Arguments.of(new CurrencyMismatchException(GBP, USD), 422, "currency-mismatch"),
                 Arguments.of(new UnsupportedCurrencyException(USD), 422, "unsupported-currency"),
-                // same account, non-positive amount, system account: one type until they get their own exceptions
-                Arguments.of(new IllegalArgumentException("Cannot transfer to the same account."), 400, "invalid-request"),
+                Arguments.of(new InvalidAmountException("Transfer", new BigDecimal("-5")), 400, "invalid-amount"),
+                Arguments.of(new SameAccountException(), 400, "same-account"),
+                Arguments.of(new NotCustomerAccountException("Transfer", AccountType.SYSTEM), 422, "not-a-customer-account"),
+                // what is left: a missing value, a bad reference or key, too many decimals
+                Arguments.of(new IllegalArgumentException("Reference cannot be blank."), 400, "invalid-request"),
                 Arguments.of(new OptimisticLockingFailureException("clash"), 409, "concurrent-update"),
                 Arguments.of(new DuplicateReferenceException(EntryType.TRANSFER, "rent-oct"), 409, "duplicate-reference"),
                 Arguments.of(new IdempotencyKeyReuseException(KEY), 422, "idempotency-key-reuse"),

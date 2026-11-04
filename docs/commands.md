@@ -62,6 +62,15 @@ Health endpoints (no details are shown):
 | http://localhost:8080/actuator/health/liveness | The app is running. Stays UP if the database is down, so it is the one to use for "restart me" |
 | http://localhost:8080/actuator/health/readiness | The app can take traffic. Includes the database, and returns 503 when Postgres is unreachable |
 
+Settings for idempotency keys (in `application.yaml`). Change one with an environment variable, for example `LEDGER_IDEMPOTENCY_WINDOW=PT1H`, or `--ledger.idempotency.window=PT1H` on the command line:
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `ledger.idempotency.window` | `PT24H` | How long an `Idempotency-Key` protects a retry. After that the same key is a new payment. Keep it longer than any client's longest retry. |
+| `ledger.idempotency.cleanup-interval` | `PT1H` | How often expired key records are deleted. Only the key records go, never the ledger. |
+
+Both are durations in ISO-8601 form (`PT30M` is 30 minutes, `PT24H` is 24 hours).
+
 ## Trying the API
 
 Accounts and transfers need to know who is calling, so every request sends an `X-Customer-Id: <uuid>` header (the Postman collection does this with its `customerId` variable), and `POST /transfers` also needs an `Idempotency-Key` header. Accounts opened through `POST /accounts` start at zero and there is no deposit endpoint yet, so load two funded demo accounts for that customer first (safe to run again, it resets the balances):
